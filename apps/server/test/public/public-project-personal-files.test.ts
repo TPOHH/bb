@@ -29,6 +29,7 @@ const routes = [
           kind: "file",
           positions: [],
           score: 1,
+          folderPath: null,
         },
       ],
       truncated: false,
