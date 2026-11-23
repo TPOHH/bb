@@ -97,6 +97,7 @@ import {
 } from "./plugin-sidebar-hooks";
 import { useSidebarSplitLayout } from "./plugin-split-layout";
 import { useSidebarThreadSplit } from "./plugin-sidebar-split";
+import { useThreadState } from "./thread-state";
 import { useExperiment } from "./plugin-experiments";
 import {
   experimental_PluginRpcCallError,
@@ -117,6 +118,7 @@ import {
 } from "./thread-actions/thread-action-registry";
 import { useCodeTheme } from "./plugin-code-theme";
 import { copyToClipboard } from "./clipboard";
+import { showMutationErrorToast } from "./mutation-errors";
 import { saveFile } from "./save-file";
 import {
   useSidebarNavigation,
@@ -232,6 +234,7 @@ export const pluginSdkAppImplementation = {
   experimental_InfoList: InfoList,
   experimental_InfoListRow: PluginInfoListRow,
   experimental_useSidebarThreads: useSidebarThreads,
+  experimental_useThread: useThreadState,
   experimental_useSidebarThreadActions: useSidebarThreadActions,
   experimental_useThreadActions: useThreadActionEntries,
   experimental_useArchiveEnvironmentThreads: useArchiveEnvironmentThreads,
@@ -264,6 +267,7 @@ export const pluginSdkAppImplementation = {
   experimental_useProviders: useProviders,
   experimental_useCodeTheme: useCodeTheme,
   experimental_copyToClipboard: copyToClipboard,
+  experimental_showErrorToast: showMutationErrorToast,
   experimental_saveFile: saveFile,
 } satisfies PluginSdkApp;
 

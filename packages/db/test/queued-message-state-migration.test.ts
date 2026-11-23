@@ -18,7 +18,9 @@ import {
   dropQueuedMessageRecheckAtColumn,
   dropProjectFolderSchema,
   dropThreadSearchOrderIndex,
+  rewindThreadPurgeStartedColumn,
   dropThreadRunStateTables,
+  dropServerAccessRouteTables,
   dropThreadStatusChangedAtColumn,
   rewindQueuedMessageStateMigration,
 } from "./helpers/rewind.js";
@@ -71,6 +73,7 @@ function rewoundDatabase(): { db: DbConnection; threadId: string } {
   dropQueuedMessageDeliveryColumns(db);
   dropThreadStatusChangedAtColumn(db);
   dropThreadRunStateTables(db);
+  dropServerAccessRouteTables(db);
   dropPluginFailureLabelColumns(db);
   rewindMachineTeardownRecoveryColumns(db);
   dropPluginMarketplaceEnabledColumn(db);
@@ -79,6 +82,7 @@ function rewoundDatabase(): { db: DbConnection; threadId: string } {
   dropForkHistoryCopyIndex(db);
   dropEnvironmentHoldColumns(db);
   dropThreadSearchOrderIndex(db);
+  rewindThreadPurgeStartedColumn(db);
   return { db, threadId: thread.id };
 }
 

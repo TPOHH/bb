@@ -12,6 +12,7 @@ export {
 export * from "./events.js";
 export * from "./experiments.js";
 export * from "./hosts.js";
+export * from "./host-server-access-grants.js";
 export * from "./legacy-automations.js";
 export * from "./legacy-deferred-thread-messages.js";
 export * from "./machines.js";
@@ -33,6 +34,7 @@ export * from "./prompt-history.js";
 export * from "./provider-model-catalogs.js";
 export * from "./queued-thread-messages.js";
 export * from "./retained-event-outputs.js";
+export * from "./thread-files.js";
 export * from "./server-move.js";
 export * from "./sessions.js";
 export * from "./sweep-item-failures.js";

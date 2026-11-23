@@ -110,6 +110,11 @@ Use `--selected-model <model-id>` to discover its reasoning choices and include 
 ## server
 
 - `bb server`
+- `bb server access`
+- `bb server access list`
+- `bb server access add`
+- `bb server access remove`
+- `bb server access order`
 - `bb server move`
 - `bb server move status`
 - `bb server move cancel`
@@ -198,6 +203,8 @@ Use `--selected-model <model-id>` to discover its reasoning choices and include 
 - `bb thread archive`
 - `bb thread unarchive`
 - `bb thread restore-environment`
+- `bb thread export`
+- `bb thread import`
 - `bb thread pin`
 - `bb thread unpin`
 - `bb thread regenerate-title`

@@ -43,7 +43,8 @@ the same change.
   covers each `bb.*` member), logging, settings, storage, server information,
   and host entries.
 - Read references/backend-sdk.md for the `bb.sdk` area map, threads, plugin
-  metadata, files, terminals, attachments, and calls to another plugin's RPC.
+  metadata, files, terminals, attachments, calls to another plugin's RPC, and
+  thread files with the `thread.delete_finalize` hook.
 - Read references/backend-api-index.md to check every public backend, host,
   AI-service, and test export.
 - Read references/backend-events.md for lifecycle events, the dispatch hook,
@@ -82,7 +83,8 @@ the same change.
 - Read references/frontend-panel-tabs.md to list the side panel's open tabs,
   bb's included, and select or close them.
 - Read references/frontend-thread-context-card.md to add a row or section to
-  the thread context card beside each thread's transcript.
+  the thread context card beside each thread's transcript, or for a context
+  segment's focus handoff and related-thread data.
 - Read references/frontend-collapsible-stack-card.md to show a collapsible
   card above a thread's composer (`experimental_CollapsibleStackCard`) from
   your provider's extension state.

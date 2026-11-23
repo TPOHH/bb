@@ -2953,6 +2953,7 @@ describe("host-daemon session schemas", () => {
 
     expect(
       hostDaemonSessionOpenResponseSchema.parse({
+        serverRoutes: { serverId: "srv_test", routes: [] },
         sessionId: "session_123",
         machineEnvironment: { revision: 0, entries: [] },
         idleProviderSessionTimeoutMinutes: 30,
@@ -2982,6 +2983,7 @@ describe("host-daemon session schemas", () => {
 
     expect(
       hostDaemonSessionOpenResponseSchema.parse({
+        serverRoutes: { serverId: "srv_test", routes: [] },
         sessionId: "session_default_shares",
         machineEnvironment: { revision: 0, entries: [] },
         idleProviderSessionTimeoutMinutes: 30,
@@ -2995,6 +2997,7 @@ describe("host-daemon session schemas", () => {
 
     expect(() =>
       hostDaemonSessionOpenResponseSchema.parse({
+        serverRoutes: { serverId: "srv_test", routes: [] },
         sessionId: "session_123",
         heartbeatIntervalMs: 5_000,
         leaseTimeoutMs: 30_000,

@@ -18,7 +18,9 @@ import {
   dropQueuedMessageRecheckAtColumn,
   dropProjectFolderSchema,
   dropThreadSearchOrderIndex,
+  rewindThreadPurgeStartedColumn,
   dropThreadRunStateTables,
+  dropServerAccessRouteTables,
   dropThreadStatusChangedAtColumn,
   restoreDiffViewedFilesTable,
   dropQueuedMessageEditHeldUntilColumn,
@@ -551,6 +553,12 @@ const eventLargeValuesMigrationPath = resolve(
   "drizzle",
   "0031_mysterious_zaran.sql",
 );
+const serverAccessRoutesMigrationPath = resolve(
+  __dirname,
+  "..",
+  "drizzle",
+  "0167_server_access_routes.sql",
+);
 const machineProvidersMigrationPath = resolve(
   __dirname,
   "..",
@@ -767,6 +775,7 @@ function rewindEnvironmentProvisioningMigration(db: DbConnection): void {
   dropQueuedMessageDeliveryColumns(db);
   dropThreadStatusChangedAtColumn(db);
   dropThreadRunStateTables(db);
+  dropServerAccessRouteTables(db);
   dropPluginFailureLabelColumns(db);
   rewindMachineTeardownRecoveryColumns(db);
   dropPluginMarketplaceEnabledColumn(db);
@@ -775,6 +784,7 @@ function rewindEnvironmentProvisioningMigration(db: DbConnection): void {
   dropForkHistoryCopyIndex(db);
   dropEnvironmentHoldColumns(db);
   dropThreadSearchOrderIndex(db);
+  rewindThreadPurgeStartedColumn(db);
   db.$client.exec("DROP TRIGGER IF EXISTS threads_lifecycle_owner_insert");
   db.$client.exec("DROP TRIGGER IF EXISTS threads_lifecycle_owner_immutable");
   db.$client.exec("DROP INDEX IF EXISTS threads_lifecycle_owner_idx");
@@ -825,6 +835,7 @@ function dropQueuedMessageAttemptColumns(db: DbConnection): void {
   dropQueuedMessageDeliveryColumns(db);
   dropThreadStatusChangedAtColumn(db);
   dropThreadRunStateTables(db);
+  dropServerAccessRouteTables(db);
   dropPluginFailureLabelColumns(db);
   rewindMachineTeardownRecoveryColumns(db);
   dropPluginMarketplaceEnabledColumn(db);
@@ -833,6 +844,7 @@ function dropQueuedMessageAttemptColumns(db: DbConnection): void {
   dropForkHistoryCopyIndex(db);
   dropEnvironmentHoldColumns(db);
   dropThreadSearchOrderIndex(db);
+  rewindThreadPurgeStartedColumn(db);
   const columns = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_info(queued_thread_messages)")
     .all();
@@ -915,6 +927,7 @@ function rewindMachineProvidersMigration(db: DbConnection): void {
   dropQueuedMessageDeliveryColumns(db);
   dropThreadStatusChangedAtColumn(db);
   dropThreadRunStateTables(db);
+  dropServerAccessRouteTables(db);
   dropPluginFailureLabelColumns(db);
   rewindMachineTeardownRecoveryColumns(db);
   dropPluginMarketplaceEnabledColumn(db);
@@ -923,6 +936,7 @@ function rewindMachineProvidersMigration(db: DbConnection): void {
   dropForkHistoryCopyIndex(db);
   dropEnvironmentHoldColumns(db);
   dropThreadSearchOrderIndex(db);
+  rewindThreadPurgeStartedColumn(db);
   db.$client.exec("DROP TABLE IF EXISTS ui_preference_defaults");
   const queuedDispatchOrigin = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_info(queued_thread_messages)")
@@ -1925,7 +1939,8 @@ describe("migrate", () => {
         defaultProviderId: null,
         providerCompletedTurnDisplay: {},
         machineServerUrl: null,
-        defaultMachineAccess: null,
+        serverAccessOrder: [],
+        localNetworkEnabled: false,
         machineGitCredentialsEnabled: true,
         streamerMode: false,
         allowFastServiceTier: true,
@@ -2725,6 +2740,7 @@ describe("migrate", () => {
       });
       dropThreadStatusChangedAtColumn(db);
       dropThreadRunStateTables(db);
+      dropServerAccessRouteTables(db);
       dropPluginFailureLabelColumns(db);
       rewindMachineTeardownRecoveryColumns(db);
       dropPluginMarketplaceEnabledColumn(db);
@@ -2733,6 +2749,7 @@ describe("migrate", () => {
       dropForkHistoryCopyIndex(db);
       dropEnvironmentHoldColumns(db);
       dropThreadSearchOrderIndex(db);
+      rewindThreadPurgeStartedColumn(db);
       restoreDiffViewedFilesTable(db);
       db.$client
         .prepare<[number, string]>(
@@ -3569,6 +3586,7 @@ describe("migrate", () => {
       dropQueuedMessageDeliveryColumns(db);
       dropThreadStatusChangedAtColumn(db);
       dropThreadRunStateTables(db);
+      dropServerAccessRouteTables(db);
       dropPluginFailureLabelColumns(db);
       rewindMachineTeardownRecoveryColumns(db);
       dropPluginMarketplaceEnabledColumn(db);
@@ -3577,6 +3595,7 @@ describe("migrate", () => {
       dropForkHistoryCopyIndex(db);
       dropEnvironmentHoldColumns(db);
       dropThreadSearchOrderIndex(db);
+      rewindThreadPurgeStartedColumn(db);
       db.$client.prepare("DROP INDEX projects_deleted_idx").run();
       db.$client.prepare("ALTER TABLE projects DROP COLUMN deleted_at").run();
       db.$client.prepare("ALTER TABLE events ADD producer_event_id text").run();
@@ -3994,6 +4013,7 @@ describe("migrate", () => {
         )
         .run(projectSourcesDefaultIndexMigrationWhen);
       dropThreadRunStateTables(db);
+      dropServerAccessRouteTables(db);
       dropPluginFailureLabelColumns(db);
       rewindMachineTeardownRecoveryColumns(db);
       dropPluginMarketplaceEnabledColumn(db);
@@ -4002,6 +4022,7 @@ describe("migrate", () => {
       dropForkHistoryCopyIndex(db);
       dropEnvironmentHoldColumns(db);
       dropThreadSearchOrderIndex(db);
+      rewindThreadPurgeStartedColumn(db);
 
       expect(() => migrate(db)).not.toThrow();
       expect(
@@ -5407,6 +5428,69 @@ describe("machine providers migration", () => {
       ).toEqual([
         { id: "direct", providerId: null, type: "persistent" },
         { id: "legacy", providerId: "connect", type: "persistent" },
+      ]);
+    } finally {
+      closeConnection(db);
+    }
+  });
+});
+
+describe("server access routes migration", () => {
+  it("copies each host's grant into the grants table and the default access choice into the route order, keeping the old values", () => {
+    const db = createConnection(":memory:");
+    try {
+      db.$client.exec(`
+        CREATE TABLE hosts (
+          id text PRIMARY KEY NOT NULL,
+          server_access_provider_id text,
+          server_access_grant_id text,
+          updated_at integer NOT NULL
+        );
+        CREATE TABLE host_daemon_sessions (id text PRIMARY KEY NOT NULL);
+        CREATE TABLE app_settings_values (
+          key text PRIMARY KEY NOT NULL,
+          value text NOT NULL,
+          updated_at integer NOT NULL
+        );
+        INSERT INTO hosts VALUES
+          ('relayed', 'connect', 'grant-1', 10),
+          ('interrupted', 'connect', NULL, 20),
+          ('local', NULL, NULL, 30);
+        INSERT INTO app_settings_values VALUES
+          ('defaultMachineAccess', '"direct"', 40);
+      `);
+
+      runMigrationFile({ db, migrationPath: serverAccessRoutesMigrationPath });
+
+      expect(
+        db.$client
+          .prepare<
+            [],
+            { hostId: string; providerId: string; grantId: string | null }
+          >(
+            "SELECT host_id AS hostId, provider_id AS providerId, grant_id AS grantId FROM host_server_access_grants ORDER BY host_id",
+          )
+          .all(),
+      ).toEqual([
+        { hostId: "interrupted", providerId: "connect", grantId: null },
+        { hostId: "relayed", providerId: "connect", grantId: "grant-1" },
+      ]);
+      expect(
+        db.$client
+          .prepare<[], { grantId: string | null }>(
+            "SELECT server_access_grant_id AS grantId FROM hosts WHERE id = 'relayed'",
+          )
+          .get(),
+      ).toEqual({ grantId: "grant-1" });
+      expect(
+        db.$client
+          .prepare<[], { key: string; value: string }>(
+            "SELECT key, value FROM app_settings_values ORDER BY key",
+          )
+          .all(),
+      ).toEqual([
+        { key: "defaultMachineAccess", value: '"direct"' },
+        { key: "serverAccessOrder", value: '["direct"]' },
       ]);
     } finally {
       closeConnection(db);
