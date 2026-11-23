@@ -136,7 +136,6 @@ import {
   type ExperimentalThreadRowMetadataLineProps,
   type ExperimentalThreadRowMetadataRegistration,
   type PluginThreadActionsOptions,
-  type PluginThreadActionTarget,
   type ExperimentalPluginBrowserToolbarActionRegistration,
   type PluginThreadListRegistration,
   type PluginRpcContract,
@@ -440,14 +439,15 @@ interface TestFixedTabTargetStore {
  * What `experimental_useThreadActions(thread)` returns in a test, in menu
  * order; the host's own actions are not emulated. `requestRename` is the
  * caller's rename editor (a no-op when it passed none), for entries whose
- * `run` renames. The fake applies `keys`. Omitted → an empty list. The fake
+ * `run` renames. `thread` is what the plugin passed, as the host reads only
+ * its `id`. The fake applies `keys`. Omitted → an empty list. The fake
  * `experimental_ThreadActionsMenu` opens on a trigger click and the fake
  * context menu on right-click; each lists these entries and its `inline`
  * items as `menuitem` buttons, and closes after one runs (calling
  * `onOpenChange(false)` and `onCloseAutoFocus`).
  */
 export type TestThreadActionsResolver = (
-  thread: PluginThreadActionTarget,
+  thread: { id: string },
   options: { requestRename(threadId: string): void },
 ) => readonly PluginThreadActionEntry[];
 
@@ -460,7 +460,7 @@ export type TestThreadActionsResolver = (
  * an empty list.
  */
 export type TestThreadBulkActionsResolver = (
-  threads: readonly PluginThreadActionTarget[],
+  threads: readonly { id: string }[],
 ) => readonly PluginThreadActionEntry[];
 
 /** One recorded `experimental_useThreadRequests()` call. */
@@ -650,7 +650,7 @@ function noRenameEditor(): void {}
 
 function useTestThreadActions(
   hook: string,
-  thread: PluginThreadActionTarget,
+  thread: { id: string },
   options?: PluginThreadActionsOptions,
 ): readonly PluginThreadActionEntry[] {
   const entries = useSlotEnv(hook).threadActions(thread, {
@@ -672,7 +672,7 @@ function TestThreadActionsMenuItems({
   onClose,
 }: {
   hook: string;
-  thread: PluginThreadActionTarget;
+  thread: { id: string };
   inline?: PluginThreadActionsMenuProps["inline"];
   requestRename?: (threadId: string) => void;
   onClose: () => void;
@@ -2022,7 +2022,7 @@ const testPluginSdkApp = {
     return useSlotEnv("experimental_useSidebarThreadActions").sidebarActions;
   },
   experimental_useThreadActions(
-    thread: PluginThreadActionTarget,
+    thread: { id: string },
     options?: PluginThreadActionsOptions,
   ): readonly PluginThreadActionEntry[] {
     return useTestThreadActions(
