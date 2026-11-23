@@ -77,6 +77,7 @@ function render(
   onChange = vi.fn(),
   worktrees: JsonValue[] = WORKTREES,
   warmPool: () => JsonValue = () => ({ pools: [] }),
+  folders: string[] = [],
 ) {
   const slot = renderSlot(
     inputsSlot(),
@@ -91,6 +92,7 @@ function render(
         listExistingWorktrees: () => ({ worktrees }),
         defaultBaseBranch: () => ({ branch: "main" }),
         warmPoolStatus: warmPool,
+        listBranchableFolders: () => ({ folders }),
       },
       branchesState: {
         branches: ["main", "release"],
@@ -114,7 +116,7 @@ describe("worktree inputs control", () => {
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith({
         status: "ready",
-        value: { branch: { kind: "default" } },
+        value: { branch: { kind: "default" }, folders: [] },
       });
     });
   });
@@ -140,7 +142,7 @@ describe("worktree inputs control", () => {
     fireEvent.click(slot.getByRole("button", { name: "release" }));
     expect(onChange).toHaveBeenLastCalledWith({
       status: "ready",
-      value: { branch: { kind: "named", name: "release" } },
+      value: { branch: { kind: "named", name: "release" }, folders: [] },
     });
   });
 
@@ -153,7 +155,7 @@ describe("worktree inputs control", () => {
     fireEvent.click(slot.getByRole("button", { name: "origin/main" }));
     expect(onChange).toHaveBeenLastCalledWith({
       status: "ready",
-      value: { branch: { kind: "named", name: "origin/main" } },
+      value: { branch: { kind: "named", name: "origin/main" }, folders: [] },
     });
   });
 
@@ -179,11 +181,50 @@ describe("worktree inputs control", () => {
       fireEvent.keyDown(search, { key: "Enter" });
       expect(onChange).toHaveBeenLastCalledWith({
         status: "ready",
-        value: { branch: { kind: "named", name: "release" } },
+        value: { branch: { kind: "named", name: "release" }, folders: [] },
       });
     } finally {
       Reflect.deleteProperty(Element.prototype, "scrollIntoView");
     }
+  });
+
+  it("branches a project folder with the worktree and keeps it when the base changes", async () => {
+    const picked = render(
+      { branch: { kind: "default" }, folders: [] },
+      vi.fn(),
+      WORKTREES,
+      () => ({ pools: [] }),
+      ["/work/api"],
+    );
+    await openPicker(picked.slot);
+    fireEvent.click(await picked.slot.findByRole("button", { name: /^api/u }));
+    expect(picked.onChange).toHaveBeenLastCalledWith({
+      status: "ready",
+      value: { branch: { kind: "default" }, folders: ["/work/api"] },
+    });
+    cleanup();
+
+    const branched = render(
+      { branch: { kind: "default" }, folders: ["/work/api"] },
+      vi.fn(),
+      WORKTREES,
+      () => ({ pools: [] }),
+      ["/work/api"],
+    );
+    await waitFor(() => {
+      expect(
+        branched.slot.getByRole("combobox", { name: "Worktree" }).textContent,
+      ).toContain("main +1");
+    });
+    await openPicker(branched.slot);
+    fireEvent.click(branched.slot.getByRole("button", { name: "release" }));
+    expect(branched.onChange).toHaveBeenLastCalledWith({
+      status: "ready",
+      value: {
+        branch: { kind: "named", name: "release" },
+        folders: ["/work/api"],
+      },
+    });
   });
 
   it("falls back to the default branch", async () => {
@@ -194,7 +235,7 @@ describe("worktree inputs control", () => {
     fireEvent.click(slot.getByRole("button", { name: "Default branch" }));
     expect(onChange).toHaveBeenLastCalledWith({
       status: "ready",
-      value: { branch: { kind: "default" } },
+      value: { branch: { kind: "default" }, folders: [] },
     });
   });
 
