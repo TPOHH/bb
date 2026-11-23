@@ -214,6 +214,11 @@ export const workspacePathEntrySchema = z.object({
 });
 export type WorkspacePathEntry = z.infer<typeof workspacePathEntrySchema>;
 
+export const workspacePathSearchFoldersSchema = z.enum(["main", "extra"]);
+export type WorkspacePathSearchFolders = z.infer<
+  typeof workspacePathSearchFoldersSchema
+>;
+
 export const workspaceSearchPathEntrySchema = workspacePathEntrySchema.extend({
   folderPath: z.string().nullable(),
 });

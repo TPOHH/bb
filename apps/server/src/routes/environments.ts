@@ -220,6 +220,7 @@ export function registerEnvironmentRoutes(
     });
     return context.json(
       await searchWorkspaceFolderPaths(deps, {
+        folders: query.folders ?? "all",
         extraFolders: listEnvironmentExtraFolderPaths(deps.db, {
           additionalPaths: environment.additionalPaths,
           hostId: environment.hostId,

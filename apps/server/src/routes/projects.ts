@@ -799,6 +799,7 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
         : getEnvironment(deps.db, query.environmentId);
     return context.json(
       await searchWorkspaceFolderPaths(deps, {
+        folders: query.folders ?? "all",
         extraFolders: listEnvironmentExtraFolderPaths(deps.db, {
           additionalPaths: environment?.additionalPaths ?? [],
           hostId: target.hostId,

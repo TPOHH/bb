@@ -1,6 +1,9 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { Environment } from "@bb/domain";
-import type { WorkspaceSearchPathListResponse } from "@bb/server-contract";
+import type {
+  WorkspacePathSearchFolders,
+  WorkspaceSearchPathListResponse,
+} from "@bb/server-contract";
 import type {
   EnvironmentFilePreviewSource,
   FilePreview,
@@ -124,6 +127,7 @@ interface UseEnvironmentPathSuggestionsArgs {
   limit?: number;
   includeFiles: boolean;
   includeDirectories: boolean;
+  folders: WorkspacePathSearchFolders;
 }
 
 export function useEnvironmentPathSuggestions(
@@ -147,9 +151,11 @@ export function useEnvironmentPathSuggestions(
       limit,
       includeFiles,
       includeDirectories,
+      args.folders,
     ),
     queryFn: ({ signal }) =>
       sdk.environments.paths({
+        folders: args.folders,
         environmentId: requireEnvironmentId(
           environmentId,
           "useEnvironmentPathSuggestions",

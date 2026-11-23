@@ -65,11 +65,11 @@ export function useFileSearchSuggestions(
     hostId: args.hostId,
     currentThreadId: args.currentThreadId,
     includeDirectories: false,
+    includeExtraFolders: false,
   });
   const suggestions = useMemo<FilePathSearchSuggestion[]>(
     () =>
       pathSuggestions.suggestions
-        .filter((suggestion) => suggestion.folderPath === null)
         .filter(isFilePathSuggestion)
         .map(toFileSearchSuggestion),
     [pathSuggestions.suggestions],

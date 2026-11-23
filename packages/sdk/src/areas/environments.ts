@@ -164,6 +164,7 @@ function environmentPathsQuery(
     includeFiles: args.includeFiles,
     limit: args.limit,
     query: args.query,
+    ...(args.folders === undefined ? {} : { folders: args.folders }),
   };
 }
 

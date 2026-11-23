@@ -5,6 +5,7 @@ import type {
   ProjectBranchesResponse,
   ProjectWithThreadsResponse,
   PromptHistoryResponse,
+  WorkspacePathSearchFolders,
   WorkspaceSearchPathListResponse,
 } from "@bb/server-contract";
 import type { FilePreview } from "@bb/client-core";
@@ -54,6 +55,7 @@ interface UseProjectPathSuggestionsArgs {
   limit?: number;
   includeFiles: boolean;
   includeDirectories: boolean;
+  folders: WorkspacePathSearchFolders;
 }
 
 interface UseProjectCommandsArgs {
@@ -223,9 +225,11 @@ export function useProjectPathSuggestions(args: UseProjectPathSuggestionsArgs) {
       limit,
       includeFiles,
       includeDirectories,
+      args.folders,
     ),
     queryFn: ({ signal }) =>
       sdk.projects.paths({
+        folders: args.folders,
         projectId: projectId ?? "",
         query: trimmedQuery,
         limit: String(limit),

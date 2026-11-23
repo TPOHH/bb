@@ -3,6 +3,7 @@ import {
   WORKSPACE_PATH_LIST_INCLUDE_HIDDEN,
 } from "../../routes/path-list-policy.js";
 import type {
+  WorkspacePathSearchFolders,
   WorkspaceSearchPathEntry,
   WorkspaceSearchPathListResponse,
 } from "@bb/server-contract";
@@ -13,6 +14,7 @@ import { callHostRetryableOnlineRpc } from "../hosts/online-rpc.js";
 
 export interface SearchWorkspaceFolderPathsArgs {
   extraFolders: readonly string[];
+  folders: WorkspacePathSearchFolders | "all";
   hostId: string;
   includeDirectories: boolean;
   includeFiles: boolean;
@@ -63,10 +65,14 @@ export async function searchWorkspaceFolderPaths(
   deps: WorkSessionDeps,
   args: SearchWorkspaceFolderPathsArgs,
 ): Promise<WorkspaceSearchPathListResponse> {
+  const folderPaths =
+    args.folders === "main"
+      ? [args.mainPath]
+      : args.folders === "extra"
+        ? args.extraFolders
+        : [args.mainPath, ...args.extraFolders];
   const lists = await Promise.all(
-    [args.mainPath, ...args.extraFolders].map((folderPath) =>
-      listFolderPaths(deps, args, folderPath),
-    ),
+    folderPaths.map((folderPath) => listFolderPaths(deps, args, folderPath)),
   );
   const [main] = lists;
   if (lists.length === 1 && main !== undefined) return main;

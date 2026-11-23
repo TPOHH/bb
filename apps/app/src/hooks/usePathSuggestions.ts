@@ -39,6 +39,7 @@ interface UsePathSuggestionsArgs {
   hostId?: string | null;
   currentThreadId?: string;
   includeDirectories: boolean;
+  includeExtraFolders: boolean;
 }
 
 interface UsePathSuggestionsResult {
@@ -195,7 +196,7 @@ export function usePathSuggestions(
     [args.includeDirectories, debouncedQuery, oversampleLimit],
   );
 
-  const projectWorkspaceQuery = useProjectPathSuggestions({
+  const projectArgs = {
     projectId: workspaceSource === "project" ? args.projectId : undefined,
     environmentId: null,
     hostId: args.hostId ?? null,
@@ -203,19 +204,43 @@ export function usePathSuggestions(
     limit: oversampleLimit,
     includeFiles: true,
     includeDirectories: args.includeDirectories,
-  });
-  const environmentWorkspaceQuery = useEnvironmentPathSuggestions({
+  };
+  const environmentArgs = {
     environmentId:
       workspaceSource === "environment" ? args.environmentId : undefined,
     query: debouncedQuery,
     limit: oversampleLimit,
     includeFiles: true,
     includeDirectories: args.includeDirectories,
+  };
+  const projectWorkspaceQuery = useProjectPathSuggestions({
+    ...projectArgs,
+    folders: "main",
+  });
+  const projectExtraFoldersQuery = useProjectPathSuggestions({
+    ...projectArgs,
+    projectId: args.includeExtraFolders ? projectArgs.projectId : undefined,
+    folders: "extra",
+  });
+  const environmentWorkspaceQuery = useEnvironmentPathSuggestions({
+    ...environmentArgs,
+    folders: "main",
+  });
+  const environmentExtraFoldersQuery = useEnvironmentPathSuggestions({
+    ...environmentArgs,
+    environmentId: args.includeExtraFolders
+      ? environmentArgs.environmentId
+      : undefined,
+    folders: "extra",
   });
   const workspaceQuery =
     workspaceSource === "environment"
       ? environmentWorkspaceQuery
       : projectWorkspaceQuery;
+  const extraFoldersQuery =
+    workspaceSource === "environment"
+      ? environmentExtraFoldersQuery
+      : projectExtraFoldersQuery;
   const threadStorageQuery = useThreadStoragePaths(
     args.currentThreadId ?? "",
     threadStorageOptions,
@@ -231,7 +256,12 @@ export function usePathSuggestions(
 
     return buildPathSuggestions({
       workspacePaths: includeWorkspace
-        ? (workspaceQuery.data?.paths ?? [])
+        ? [
+            ...(workspaceQuery.data?.paths ?? []),
+            ...(args.includeExtraFolders
+              ? (extraFoldersQuery.data?.paths ?? [])
+              : []),
+          ]
         : [],
       threadStoragePaths: includeThreadStorage
         ? (threadStorageQuery.data?.paths ?? [])
@@ -245,6 +275,8 @@ export function usePathSuggestions(
     limit,
     threadStorageQuery.data?.paths,
     workspaceQuery.data?.paths,
+    extraFoldersQuery.data?.paths,
+    args.includeExtraFolders,
   ]);
 
   const isFetching =
