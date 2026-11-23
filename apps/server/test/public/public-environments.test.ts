@@ -220,6 +220,18 @@ describe("public environments", () => {
         ],
         truncated: false,
       });
+
+      for (const [folders, expected] of [
+        ["main", ["/work/app"]],
+        ["extra", ["/work/api", "/work/gone"]],
+      ] as const) {
+        listed.length = 0;
+        const scoped = await harness.app.request(
+          `/api/v1/environments/${environment.id}/paths?query=app&includeFiles=true&includeDirectories=false&folders=${folders}`,
+        );
+        expect(scoped.status).toBe(200);
+        expect(listed.sort()).toEqual(expected);
+      }
     });
   });
 
