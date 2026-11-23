@@ -18,7 +18,7 @@ import {
   type EnvironmentArchiveThreadsResponse,
   type EnvironmentPathsQuery,
   type UpdateEnvironmentRequest,
-  type WorkspacePathListResponse,
+  type WorkspaceSearchPathListResponse,
   type SystemEnvironmentProvider,
 } from "@bb/server-contract";
 import { signalRequestArgs, type CreateSdkAreaArgs } from "./common.js";
@@ -71,7 +71,7 @@ export interface EnvironmentPathsArgs extends EnvironmentPathsQuery {
 export type EnvironmentArchiveThreadsResult = EnvironmentArchiveThreadsResponse;
 export type EnvironmentCommitResult = CommitActionResponse;
 export type EnvironmentGetResult = Environment;
-export type EnvironmentPathsResult = WorkspacePathListResponse;
+export type EnvironmentPathsResult = WorkspaceSearchPathListResponse;
 export type EnvironmentUpdateResult = Environment;
 export interface EnvironmentListArgs {
   environmentProviderId?: string;

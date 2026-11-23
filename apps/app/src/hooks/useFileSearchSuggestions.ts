@@ -69,6 +69,7 @@ export function useFileSearchSuggestions(
   const suggestions = useMemo<FilePathSearchSuggestion[]>(
     () =>
       pathSuggestions.suggestions
+        .filter((suggestion) => suggestion.folderPath === null)
         .filter(isFilePathSuggestion)
         .map(toFileSearchSuggestion),
     [pathSuggestions.suggestions],

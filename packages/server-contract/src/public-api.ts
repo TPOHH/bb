@@ -300,7 +300,7 @@ import {
   type UpdateQueuedMessageRequest,
   type UploadedPromptAttachment,
   type WorkspaceFileListResponse,
-  type WorkspacePathListResponse,
+  type WorkspaceSearchPathListResponse,
   closeTerminalRequestSchema,
   copyProjectAttachmentsRequestSchema,
   createFilePreviewRequestSchema,
@@ -637,7 +637,7 @@ export const publicApiRoutes = {
       request: queryRequest<PathProjectId, ProjectPathsQuery>(
         projectPathsQuerySchema,
       ),
-      response: jsonResponse<WorkspacePathListResponse>(),
+      response: jsonResponse<WorkspaceSearchPathListResponse>(),
     }),
     commands: defineRoute({
       path: "/projects/:id/commands",
@@ -1291,7 +1291,7 @@ export const publicApiRoutes = {
       request: queryRequest<PathId, EnvironmentPathsQuery>(
         environmentPathsQuerySchema,
       ),
-      response: jsonResponse<WorkspacePathListResponse>(),
+      response: jsonResponse<WorkspaceSearchPathListResponse>(),
     }),
     file: defineRoute({
       path: "/environments/:id/files/:filePath{.+}",

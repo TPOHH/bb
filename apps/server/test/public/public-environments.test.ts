@@ -1,11 +1,17 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { getEnvironment, threads } from "@bb/db";
+import {
+  createProjectSourceFolder,
+  getEnvironment,
+  setEnvironmentColumns,
+  threads,
+} from "@bb/db";
 import {
   registerTestHostRpcCapture,
   reportQueuedCommandSuccess,
   waitForQueuedCommand,
 } from "../helpers/commands.js";
+import { registerHostRpcResponder } from "../helpers/host-rpc.js";
 import { readJson } from "../helpers/json.js";
 import {
   seedEnvironment,
@@ -133,9 +139,142 @@ describe("public environments", () => {
             name: "app.ts",
             score: 80,
             positions: [0, 1, 2],
+            folderPath: null,
           },
         ],
         truncated: false,
+      });
+    });
+  });
+
+  it("searches the project's and the environment's folders too and says which folder each result is from", async () => {
+    await withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-environment-paths-folders",
+      });
+      const listed: string[] = [];
+      registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: ({ command }) => {
+          if (command.type !== "host.list_paths") {
+            throw new Error(`Unexpected RPC ${command.type}`);
+          }
+          listed.push(command.path);
+          if (command.path === "/work/gone") {
+            return {
+              ok: false,
+              errorCode: "ENOENT",
+              errorMessage: "Path does not exist",
+            };
+          }
+          const score = command.path === "/work/api" ? 90 : 70;
+          return {
+            ok: true,
+            result: {
+              paths: [
+                {
+                  kind: "file",
+                  path: "src/app.ts",
+                  name: "app.ts",
+                  score,
+                  positions: [],
+                },
+              ],
+              truncated: false,
+            },
+          };
+        },
+      });
+      const { project, source } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/work/app",
+      });
+      createProjectSourceFolder(harness.db, harness.hub, {
+        projectId: project.id,
+        projectSourceId: source.id,
+        path: "/work/api",
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/work/app",
+      });
+      setEnvironmentColumns(harness.db, environment.id, {
+        additionalPaths: ["/work/gone"],
+      });
+
+      const response = await harness.app.request(
+        `/api/v1/environments/${environment.id}/paths?query=app&includeFiles=true&includeDirectories=false&limit=2`,
+      );
+
+      expect(response.status).toBe(200);
+      expect(listed.sort()).toEqual(["/work/api", "/work/app", "/work/gone"]);
+      await expect(readJson(response)).resolves.toEqual({
+        paths: [
+          expect.objectContaining({
+            path: "src/app.ts",
+            folderPath: "/work/api",
+          }),
+          expect.objectContaining({ path: "src/app.ts", folderPath: null }),
+        ],
+        truncated: false,
+      });
+    });
+  });
+
+  it("searches the project's folders for the chosen machine before a thread has an environment", async () => {
+    await withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-project-paths-folders",
+      });
+      const listed: string[] = [];
+      registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: ({ command }) => {
+          if (command.type !== "host.list_paths") {
+            throw new Error(`Unexpected RPC ${command.type}`);
+          }
+          listed.push(command.path);
+          return {
+            ok: true,
+            result: {
+              paths: [
+                {
+                  kind: "file",
+                  path: "README.md",
+                  name: "README.md",
+                  score: 50,
+                  positions: [],
+                },
+              ],
+              truncated: false,
+            },
+          };
+        },
+      });
+      const { project, source } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/work/app",
+      });
+      createProjectSourceFolder(harness.db, harness.hub, {
+        projectId: project.id,
+        projectSourceId: source.id,
+        path: "/work/docs",
+      });
+
+      const response = await harness.app.request(
+        `/api/v1/projects/${project.id}/paths?hostId=${host.id}&query=readme&includeFiles=true&includeDirectories=true`,
+      );
+
+      expect(response.status).toBe(200);
+      expect(listed.sort()).toEqual(["/work/app", "/work/docs"]);
+      await expect(readJson(response)).resolves.toMatchObject({
+        paths: [
+          { path: "README.md", folderPath: null },
+          { path: "README.md", folderPath: "/work/docs" },
+        ],
       });
     });
   });

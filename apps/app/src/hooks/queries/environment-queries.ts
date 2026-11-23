@@ -1,6 +1,6 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { Environment } from "@bb/domain";
-import type { WorkspacePathListResponse } from "@bb/server-contract";
+import type { WorkspaceSearchPathListResponse } from "@bb/server-contract";
 import type {
   EnvironmentFilePreviewSource,
   FilePreview,
@@ -140,7 +140,7 @@ export function useEnvironmentPathSuggestions(
   const enabled = Boolean(environmentId) && trimmedQuery.length > 0;
   useEnvironmentDetailRealtimeSubscription(environmentId, { enabled });
 
-  return useQuery<WorkspacePathListResponse>({
+  return useQuery<WorkspaceSearchPathListResponse>({
     queryKey: environmentPathsQueryKey(
       environmentId ?? undefined,
       trimmedQuery,
@@ -165,4 +165,3 @@ export function useEnvironmentPathSuggestions(
     placeholderData: (previousData) => previousData,
   });
 }
-

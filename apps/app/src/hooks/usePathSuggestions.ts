@@ -1,5 +1,9 @@
 import { useMemo } from "react";
-import type { WorkspacePathEntry } from "@bb/server-contract";
+import { joinHostPath } from "@bb/domain";
+import type {
+  WorkspacePathEntry,
+  WorkspaceSearchPathEntry,
+} from "@bb/server-contract";
 import { useEnvironmentPathSuggestions } from "./queries/environment-queries";
 import { useProjectPathSuggestions } from "./queries/project-queries";
 import { useThreadStoragePaths } from "./queries/thread-panel-queries";
@@ -20,6 +24,7 @@ type WorkspaceSource = "environment" | "project" | "none";
 export interface PathSuggestion {
   source: PathSuggestionSource;
   entryKind: PathSuggestionEntryKind;
+  folderPath: string | null;
   path: string;
   name: string;
   score: number;
@@ -78,6 +83,7 @@ function toPathSuggestion(
   return {
     source: rankedSuggestion.source,
     entryKind: rankedSuggestion.entryKind,
+    folderPath: rankedSuggestion.folderPath,
     path: rankedSuggestion.path,
     name: rankedSuggestion.name,
     score: rankedSuggestion.score,
@@ -87,12 +93,13 @@ function toPathSuggestion(
 
 interface ToRankedPathSuggestionArgs {
   pathEntry: WorkspacePathEntry;
+  folderPath: string | null;
   source: PathSuggestionSource;
   sourceOrder: number;
 }
 
 interface BuildPathSuggestionsArgs {
-  workspacePaths: readonly WorkspacePathEntry[];
+  workspacePaths: readonly WorkspaceSearchPathEntry[];
   threadStoragePaths: readonly WorkspacePathEntry[];
   limit: number;
 }
@@ -105,7 +112,14 @@ function toRankedPathSuggestion(
     sourceRank: getSourceRank(args.source),
     sourceOrder: args.sourceOrder,
     entryKind: args.pathEntry.kind,
-    path: args.pathEntry.path,
+    folderPath: args.folderPath,
+    path:
+      args.folderPath === null
+        ? args.pathEntry.path
+        : (joinHostPath({
+            rootPath: args.folderPath,
+            relativePath: args.pathEntry.path,
+          }) ?? args.pathEntry.path),
     name: args.pathEntry.name,
     score: args.pathEntry.score,
     positions: args.pathEntry.positions,
@@ -121,6 +135,7 @@ export function buildPathSuggestions(
     rankedSuggestions.push(
       toRankedPathSuggestion({
         pathEntry,
+        folderPath: pathEntry.folderPath,
         source: "workspace",
         sourceOrder,
       }),
@@ -130,6 +145,7 @@ export function buildPathSuggestions(
     rankedSuggestions.push(
       toRankedPathSuggestion({
         pathEntry,
+        folderPath: null,
         source: "thread-storage",
         sourceOrder,
       }),

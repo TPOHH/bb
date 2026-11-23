@@ -5,7 +5,7 @@ import type {
   ProjectBranchesResponse,
   ProjectWithThreadsResponse,
   PromptHistoryResponse,
-  WorkspacePathListResponse,
+  WorkspaceSearchPathListResponse,
 } from "@bb/server-contract";
 import type { FilePreview } from "@bb/client-core";
 import { loadFilePreview } from "@/lib/api";
@@ -214,7 +214,7 @@ export function useProjectPathSuggestions(args: UseProjectPathSuggestionsArgs) {
   const enabled = Boolean(projectId) && trimmedQuery.length > 0;
   useProjectDetailRealtimeSubscription(projectId, { enabled });
 
-  return useQuery<WorkspacePathListResponse>({
+  return useQuery<WorkspaceSearchPathListResponse>({
     queryKey: projectPathsQueryKey(
       projectId,
       args.environmentId,
