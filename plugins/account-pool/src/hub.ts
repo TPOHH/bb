@@ -4,15 +4,16 @@ import {
   type RetryAvailability,
 } from "./retry-contract.js";
 import { HUB_TOKEN_HEADER } from "./parent-pool.js";
-import type {
-  Account,
-  AccountPoolConfig,
-  AccountQuota,
-  AccountSecret,
-  AccountSummary,
-  ModelFamily,
-  PoolProvider,
-  PoolStatus,
+import {
+  proxySchemeSchema,
+  type Account,
+  type AccountPoolConfig,
+  type AccountQuota,
+  type AccountSecret,
+  type AccountSummary,
+  type ModelFamily,
+  type PoolProvider,
+  type PoolStatus,
 } from "./contracts.js";
 import { createClaudeAdapter } from "./claude-adapter.js";
 import {
@@ -466,7 +467,7 @@ export class AccountPoolHub {
           url === null
             ? null
             : {
-                scheme: url.protocol === "http:" ? "http" : "https",
+                scheme: proxySchemeSchema.parse(url.protocol.slice(0, -1)),
                 host: url.host,
               },
         proxyUnreadable: false,
