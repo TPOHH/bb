@@ -356,6 +356,9 @@ function createFakeRuntime(): AgentRuntime {
     listOpenBackgroundWork() {
       return [];
     },
+    async reconfigureSkillRoots() {
+      return { appliedToEveryProvider: false };
+    },
     async shutdown() {},
   };
 }
