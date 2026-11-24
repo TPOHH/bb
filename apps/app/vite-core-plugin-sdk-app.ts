@@ -19,7 +19,9 @@ export function corePluginSdkApp(): Plugin {
       const normalizedImporter = normalizePath(importer);
       if (PLUGIN_RUNTIME_IMPORTERS.test(normalizedImporter)) return null;
       if (source === "@get-bb/plugin-sdk/app") {
-        return normalizedImporter.startsWith(appSourcePrefix) ? binding : null;
+        return normalizedImporter.startsWith(appSourcePrefix)
+          ? { id: binding, moduleSideEffects: false }
+          : null;
       }
       if (source === "sonner") {
         return normalizedImporter.startsWith(coreContributionPrefix)
