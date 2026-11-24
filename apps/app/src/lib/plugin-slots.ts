@@ -25,7 +25,6 @@ import type {
   PluginSettingsSectionRegistration,
   PluginSidebarFooterActionRegistration,
   PluginSourceCodeRendererRegistration,
-  ExperimentalThreadContextSegmentRegistration,
   ExperimentalThreadInfoRowRegistration,
   ExperimentalThreadRowMetadataRegistration,
   ExperimentalThreadInfoSectionRegistration,
@@ -51,6 +50,7 @@ import {
   type CollectedSidebarFooterItem,
   type CollectedSidebarNavigationRegistration,
   type CollectedThreadContextCardSectionRegistration,
+  type CollectedThreadContextSegmentRegistration,
 } from "@get-bb/plugin-sdk/internal/plugin-app-collector";
 
 const coreMessageMetadata = collectCoreContributionSlots(
@@ -74,7 +74,7 @@ export interface PluginRegistrationSet {
   threadLists?: readonly PluginThreadListRegistration[];
   experimentalSidebarNavigations?: readonly CollectedSidebarNavigationRegistration[];
   threadHeaderActions?: readonly LegacyThreadHeaderActionRegistration[];
-  threadContextSegments?: readonly ExperimentalThreadContextSegmentRegistration[];
+  threadContextSegments?: readonly CollectedThreadContextSegmentRegistration[];
   threadInfoRows?: readonly ExperimentalThreadInfoRowRegistration[];
   threadRowMetadata?: readonly ExperimentalThreadRowMetadataRegistration<unknown>[];
   threadInfoSections?: readonly ExperimentalThreadInfoSectionRegistration[];
@@ -150,8 +150,8 @@ export interface ExperimentalSidebarNavigationSlot
   extends CollectedSidebarNavigationRegistration, PluginSlotBase {}
 interface PluginThreadHeaderActionSlot
   extends LegacyThreadHeaderActionRegistration, PluginSlotBase {}
-export interface PluginThreadContextSegmentSlot
-  extends ExperimentalThreadContextSegmentRegistration, PluginSlotBase {}
+export type PluginThreadContextSegmentSlot =
+  CollectedThreadContextSegmentRegistration & PluginSlotBase;
 export interface PluginThreadInfoRowSlot
   extends ExperimentalThreadInfoRowRegistration, PluginSlotBase {}
 export interface PluginThreadRowMetadataSlot

@@ -9,6 +9,8 @@ type CoreContributionKind =
   | "tabs"
   | "messageMetadata"
   | "threadContextSegments"
+  | "threadContextCardRows"
+  | "threadContextCardSections"
   | "threadActions";
 
 export type CoreContributionSlot<Kind extends CoreContributionKind> =
