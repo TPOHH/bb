@@ -28,7 +28,6 @@ import {
   isRunningThreadRuntimeDisplayStatus,
   ThreadTimelineSurface,
   type ThreadTimelineAddToChatHandler,
-  type ThreadTimelineConsumerMessageAction,
   type ThreadTimelineEditMessageHandler,
   type ThreadTimelineEditMessageTarget,
   type ThreadTimelineForkMessageHandler,
@@ -85,6 +84,7 @@ import {
 } from "./ThreadDetailPromptArea";
 import type { SendMessageMutationLike } from "./threadDetailMutationTypes";
 import type { MessageRevealRequest } from "@/components/thread/timeline/useScrollToSearchedMessage";
+import type { PluginMessageActionSlot } from "@/lib/plugin-slots";
 
 const THREAD_DETAIL_COMPOSER_ID = "thread-detail-follow-up-composer";
 const EMPTY_CHILD_THREAD_ITEMS: readonly ChildThreadPendingAttentionSource[] =
@@ -101,7 +101,7 @@ export type ThreadScreenPresentation =
   | { kind: "transcript"; layout: "contained" | "document" };
 
 export interface ThreadScreenTimelineHost {
-  consumerMessageActions: readonly ThreadTimelineConsumerMessageAction[];
+  instanceMessageActions: readonly PluginMessageActionSlot[];
   environmentHostName: string | null;
   leadingContent: ReactNode;
   messageActionSurface: ExperimentalMessageActionSurface;
@@ -616,12 +616,11 @@ export function ThreadScreen({
             isPanelPresentation ? "mx-2 mt-4 text-destructive" : undefined
           }
           leadingContent={timelineHost.leadingContent}
-          consumerMessageActions={timelineHost.consumerMessageActions}
+          instanceMessageActions={timelineHost.instanceMessageActions}
           onForkMessage={timelineHost.onForkMessage ?? undefined}
           onEditMessage={handleEditSentMessage}
           inlineMessageEditor={inlineMessageEditor}
-          onMessageAddToChat={selectionAddToChat}
-          onSelectionAddToChat={selectionAddToChat}
+          onAddToChat={selectionAddToChat}
           onLoadOlderRows={timeline.loadOlderTimelineRows}
           onTitleAction={timelineHost.onTitleAction ?? undefined}
           projectId={projectId}
