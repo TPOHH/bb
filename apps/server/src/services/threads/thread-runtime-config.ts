@@ -2,12 +2,7 @@ import {
   resolveHostEnvironment,
   mergeHostAndProviderEnvironment,
 } from "../hosts/host-environment.js";
-import {
-  getEnvironment,
-  getHost,
-  getProject,
-  listProjectFolderPathsForHost,
-} from "@bb/db";
+import { getEnvironment, getHost, getProject } from "@bb/db";
 import { PLUGIN_DYNAMIC_INSTRUCTIONS_MAX_CHARS } from "@get-bb/plugin-sdk/internal/host-policy";
 import type {
   DynamicTool,
@@ -43,7 +38,7 @@ import {
 import { readWorkspaceAgentContext } from "./workspace-agent-context.js";
 import { renderWorkspaceFolderInstructions } from "./workspace-folder-instructions.js";
 import { reportMissingWorkspaceFolders } from "./workspace-folder-notices.js";
-import { mergeWorkspaceFolderPaths } from "../projects/workspace-folder-paths.js";
+import { listEnvironmentExtraFolderPaths } from "../environments/environment-workspace-folders.js";
 import { resolveDeprecatedWorkspaceProvisionType } from "../environments/environment-response.js";
 import { markTurnTraceSpan } from "../system/turn-trace.js";
 import { sliceUtf16Head } from "@bb/text-utils";
@@ -143,15 +138,11 @@ export async function resolveThreadRuntimeCommandConfig(
     throw new ApiError(404, "host_not_found", "Host not found");
   }
 
-  const candidateFolders = mergeWorkspaceFolderPaths({
+  const candidateFolders = listEnvironmentExtraFolderPaths(deps.db, {
+    additionalPaths: environment.additionalPaths,
+    hostId: args.environment.hostId,
     mainPath: workspacePath,
-    paths: [
-      ...listProjectFolderPathsForHost(deps.db, {
-        projectId: project.id,
-        hostId: args.environment.hostId,
-      }),
-      ...environment.additionalPaths,
-    ],
+    projectId: project.id,
   });
   const workspaceAgentContext = await readWorkspaceAgentContext(deps, {
     includeAgentInstructions: true,
