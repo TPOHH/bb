@@ -10,7 +10,6 @@ export function corePluginSdkApp(): Plugin {
   const appSourcePrefix = `${normalizePath(resolve(appDir, "src"))}/`;
   const coreContributionPrefix = `${normalizePath(resolve(appDir, "src/core-contributions"))}/`;
   const binding = resolve(appDir, "src/lib/core-plugin-sdk-app.ts");
-  const lazyBinding = resolve(appDir, "src/lib/core-plugin-sdk-app-lazy.ts");
   const sonnerBinding = resolve(appDir, "src/lib/plugin-sonner.ts");
   return {
     name: "bb:core-plugin-sdk-app",
@@ -20,11 +19,9 @@ export function corePluginSdkApp(): Plugin {
       const normalizedImporter = normalizePath(importer);
       if (PLUGIN_RUNTIME_IMPORTERS.test(normalizedImporter)) return null;
       if (source === "@get-bb/plugin-sdk/app") {
-        if (!normalizedImporter.startsWith(appSourcePrefix)) return null;
-        return normalizedImporter.startsWith(coreContributionPrefix) &&
-          normalizedImporter.slice(coreContributionPrefix.length).includes("/")
-          ? lazyBinding
-          : binding;
+        return normalizedImporter.startsWith(appSourcePrefix)
+          ? { id: binding, moduleSideEffects: false }
+          : null;
       }
       if (source === "sonner") {
         return normalizedImporter.startsWith(coreContributionPrefix)
