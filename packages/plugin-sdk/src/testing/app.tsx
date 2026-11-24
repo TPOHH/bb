@@ -110,6 +110,8 @@ import {
   type PluginSidebarThreadSplit,
   type PluginProvidersState,
   type ExperimentalThreadState,
+  type ExperimentalEnvironmentState,
+  type ExperimentalThreadStorageFilesState,
   type PluginSidebarThreadsState,
   type PluginSourceCodeRendererRegistration,
   type ExperimentalThreadContextSegmentRegistration,
@@ -124,6 +126,8 @@ import {
   type ExperimentalPanelTabIconProps,
   type ExperimentalPanelTabs,
   type ExperimentalInfoSectionProps,
+  type ExperimentalThreadTabProps,
+  type ExperimentalSearchPickerOptionsArgs,
   type ExperimentalDetailRowProps,
   type ExperimentalInfoListProps,
   type ExperimentalInfoListRowProps,
@@ -401,6 +405,8 @@ interface SlotEnv {
   threadActionRegistrations: readonly PluginThreadActionRegistrationInfo[];
   sidebarDraftThreadIds: ReadonlySet<string>;
   threadStates: ReadonlyMap<string, ExperimentalThreadState>;
+  environmentStates: ReadonlyMap<string, ExperimentalEnvironmentState>;
+  threadStorageFiles: ReadonlyMap<string, ExperimentalThreadStorageFilesState>;
   experiments: ReadonlySet<string>;
   threadContextKind: ExperimentalThreadContextKind;
   threadExtensionStates: Readonly<
@@ -880,6 +886,12 @@ const NOT_FOUND_THREAD: ExperimentalThreadState = Object.freeze({
   status: "notFound",
   thread: null,
 });
+const NOT_FOUND_ENVIRONMENT: ExperimentalEnvironmentState = Object.freeze({
+  status: "notFound",
+  environment: null,
+});
+const LOADING_THREAD_STORAGE_FILES: ExperimentalThreadStorageFilesState =
+  Object.freeze({ status: "loading", files: null });
 
 function useSlotEnv(hook: string): SlotEnv {
   const env = useContext(SlotEnvContext);
@@ -1475,8 +1487,13 @@ function TestPluginIcon({ className }: ExperimentalPluginIconProps) {
 function TestThreadTitleText({
   title,
   className,
+  tooltip = false,
 }: ExperimentalThreadTitleTextProps) {
-  return <span className={className}>{title}</span>;
+  return (
+    <span className={className} title={tooltip ? title : undefined}>
+      {title}
+    </span>
+  );
 }
 
 /**
@@ -1592,6 +1609,30 @@ function TestInfoSection({
       {children}
     </section>
   );
+}
+
+/**
+ * Stand-in for bb's fuzzy picker search: keeps, in order, the options whose
+ * label or an alias contains the query, ignoring case.
+ */
+function testSearchPickerOptions<Option>({
+  options,
+  query,
+  getLabel,
+  getAliases,
+}: ExperimentalSearchPickerOptionsArgs<Option>): readonly Option[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return options;
+  return options.filter((option) =>
+    [getLabel(option), ...(getAliases?.(option) ?? [])].some((text) =>
+      text.toLowerCase().includes(needle),
+    ),
+  );
+}
+
+/** Stand-in for bb's thread Info body; bb renders the registered rows and sections. */
+function TestThreadInfo({ threadId }: ExperimentalThreadTabProps) {
+  return <section aria-label="Thread info" data-thread-id={threadId} />;
 }
 
 /** Stand-in for bb's collapsible stack card; always shows its body. */
@@ -1938,6 +1979,7 @@ const testPluginSdkApp = {
   },
   experimental_matchesShortcutKey: matchesAppShortcutKey,
   experimental_sliceUtf16Head: sliceUtf16Head,
+  experimental_searchPickerOptions: testSearchPickerOptions,
   experimental_ImageLightbox: TestImageLightbox,
   experimental_PromptMentionIcon: TestPromptMentionIcon,
   experimental_describePromptMention(
@@ -1970,6 +2012,7 @@ const testPluginSdkApp = {
   experimental_FilePreview: TestFilePreview,
   experimental_Diff: TestDiff,
   experimental_InfoSection: TestInfoSection,
+  experimental_ThreadInfo: TestThreadInfo,
   experimental_CollapsibleStackCard: TestCollapsibleStackCard,
   experimental_DetailRow: TestDetailRow,
   experimental_ThreadContextCardRow: TestThreadContextCardRow,
@@ -1983,6 +2026,22 @@ const testPluginSdkApp = {
     return (
       useSlotEnv("experimental_useThread").threadStates.get(threadId) ??
       NOT_FOUND_THREAD
+    );
+  },
+  experimental_useThreadStorageFiles(
+    threadId,
+  ): ExperimentalThreadStorageFilesState {
+    return (
+      useSlotEnv("experimental_useThreadStorageFiles").threadStorageFiles.get(
+        threadId,
+      ) ?? LOADING_THREAD_STORAGE_FILES
+    );
+  },
+  experimental_useEnvironment(environmentId): ExperimentalEnvironmentState {
+    return (
+      useSlotEnv("experimental_useEnvironment").environmentStates.get(
+        environmentId,
+      ) ?? NOT_FOUND_ENVIRONMENT
     );
   },
   experimental_useProviders(): PluginProvidersState {
@@ -2597,6 +2656,18 @@ export interface RenderSlotOptions<
    * report `notFound`.
    */
   threads?: Readonly<Record<string, ExperimentalThreadState>>;
+  /**
+   * What `experimental_useEnvironment(id)` reports per environment id.
+   * Omitted ids report `notFound`.
+   */
+  environments?: Readonly<Record<string, ExperimentalEnvironmentState>>;
+  /**
+   * What `experimental_useThreadStorageFiles(threadId)` reports per thread
+   * id. Omitted ids stay `loading`.
+   */
+  threadStorageFiles?: Readonly<
+    Record<string, ExperimentalThreadStorageFilesState>
+  >;
   /** Experiment keys `experimental_useExperiment()` reports as on. Omitted → none. */
   experiments?: readonly string[];
   /** What `experimental_useThreadContextKind()` reports. Omitted → `banner`. */
@@ -3193,6 +3264,12 @@ export function renderSlot<
   const threadStates: ReadonlyMap<string, ExperimentalThreadState> = new Map(
     Object.entries(options.threads ?? {}),
   );
+  const environmentStates: ReadonlyMap<string, ExperimentalEnvironmentState> =
+    new Map(Object.entries(options.environments ?? {}));
+  const threadStorageFiles: ReadonlyMap<
+    string,
+    ExperimentalThreadStorageFilesState
+  > = new Map(Object.entries(options.threadStorageFiles ?? {}));
   const sidebarRowStatuses = new Map(
     Object.entries(options.sidebarRowStatuses ?? {}),
   );
@@ -3660,6 +3737,8 @@ export function renderSlot<
       options.threadActionRegistrations ?? NO_THREAD_ACTION_REGISTRATIONS,
     sidebarDraftThreadIds,
     threadStates,
+    environmentStates,
+    threadStorageFiles,
     experiments: new Set(options.experiments ?? []),
     threadContextKind: options.threadContextKind ?? "banner",
     threadExtensionStates: options.threadExtensionStates ?? {},

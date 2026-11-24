@@ -23,6 +23,7 @@ import type {
   JsonObject,
   ReasoningLevel,
   ThreadChangeKind,
+  ThreadFailureKind,
   ThreadOriginKind,
   ThreadParentNotifications,
   ThreadSearchSourceKind,
@@ -453,6 +454,23 @@ const prepareGetThread = (db: DbQueryConnection) =>
 
 export function getThread(db: ThreadWriteConnection, id: string) {
   return prepareCachedQuery(db, prepareGetThread).get({ id }) ?? null;
+}
+
+const prepareGetThreadFailureKind = (db: DbQueryConnection) =>
+  db
+    .select({ failureKind: threads.failureKind })
+    .from(threads)
+    .where(eq(threads.id, placeholder("id")))
+    .prepare();
+
+export function getThreadFailureKind(
+  db: DbQueryConnection,
+  id: string,
+): ThreadFailureKind | null {
+  return (
+    prepareCachedQuery(db, prepareGetThreadFailureKind).get({ id })
+      ?.failureKind ?? null
+  );
 }
 
 export interface ThreadMentionRow {

@@ -24,6 +24,7 @@ import {
   dropQueuedMessageRecheckAtColumn,
   dropProjectFolderSchema,
   dropThreadSearchOrderIndex,
+  rewindThreadFailureKindColumn,
   rewindThreadPurgeStartedColumn,
   dropThreadRunStateTables,
   dropServerAccessRouteTables,
@@ -143,6 +144,7 @@ it.each([false, true])(
       dropForkHistoryCopyIndex(db);
       dropEnvironmentHoldColumns(db);
       dropThreadSearchOrderIndex(db);
+      rewindThreadFailureKindColumn(db);
       rewindThreadPurgeStartedColumn(db);
       migrate(db);
       migrate(db);

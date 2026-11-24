@@ -18,6 +18,7 @@ import {
   dropQueuedMessageRecheckAtColumn,
   dropProjectFolderSchema,
   dropThreadSearchOrderIndex,
+  rewindThreadFailureKindColumn,
   rewindThreadPurgeStartedColumn,
   dropThreadRunStateTables,
   dropServerAccessRouteTables,
@@ -784,6 +785,7 @@ function rewindEnvironmentProvisioningMigration(db: DbConnection): void {
   dropForkHistoryCopyIndex(db);
   dropEnvironmentHoldColumns(db);
   dropThreadSearchOrderIndex(db);
+  rewindThreadFailureKindColumn(db);
   rewindThreadPurgeStartedColumn(db);
   db.$client.exec("DROP TRIGGER IF EXISTS threads_lifecycle_owner_insert");
   db.$client.exec("DROP TRIGGER IF EXISTS threads_lifecycle_owner_immutable");
@@ -844,6 +846,7 @@ function dropQueuedMessageAttemptColumns(db: DbConnection): void {
   dropForkHistoryCopyIndex(db);
   dropEnvironmentHoldColumns(db);
   dropThreadSearchOrderIndex(db);
+  rewindThreadFailureKindColumn(db);
   rewindThreadPurgeStartedColumn(db);
   const columns = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_info(queued_thread_messages)")
@@ -936,6 +939,7 @@ function rewindMachineProvidersMigration(db: DbConnection): void {
   dropForkHistoryCopyIndex(db);
   dropEnvironmentHoldColumns(db);
   dropThreadSearchOrderIndex(db);
+  rewindThreadFailureKindColumn(db);
   rewindThreadPurgeStartedColumn(db);
   db.$client.exec("DROP TABLE IF EXISTS ui_preference_defaults");
   const queuedDispatchOrigin = db.$client
@@ -2749,6 +2753,7 @@ describe("migrate", () => {
       dropForkHistoryCopyIndex(db);
       dropEnvironmentHoldColumns(db);
       dropThreadSearchOrderIndex(db);
+      rewindThreadFailureKindColumn(db);
       rewindThreadPurgeStartedColumn(db);
       restoreDiffViewedFilesTable(db);
       db.$client
@@ -3595,6 +3600,7 @@ describe("migrate", () => {
       dropForkHistoryCopyIndex(db);
       dropEnvironmentHoldColumns(db);
       dropThreadSearchOrderIndex(db);
+      rewindThreadFailureKindColumn(db);
       rewindThreadPurgeStartedColumn(db);
       db.$client.prepare("DROP INDEX projects_deleted_idx").run();
       db.$client.prepare("ALTER TABLE projects DROP COLUMN deleted_at").run();
@@ -4022,6 +4028,7 @@ describe("migrate", () => {
       dropForkHistoryCopyIndex(db);
       dropEnvironmentHoldColumns(db);
       dropThreadSearchOrderIndex(db);
+      rewindThreadFailureKindColumn(db);
       rewindThreadPurgeStartedColumn(db);
 
       expect(() => migrate(db)).not.toThrow();

@@ -196,6 +196,7 @@ export function rewindQueuedMessageRecheckAtMigration(db: DbConnection): void {
   db.$client
     .prepare("DELETE FROM __drizzle_migrations WHERE created_at >= ?")
     .run(QUEUED_MESSAGE_RECHECK_AT_MIGRATION_TIMESTAMP);
+  rewindThreadFailureKindColumn(db);
   rewindThreadPurgeStartedColumn(db);
   dropThreadSearchOrderIndex(db);
   dropForkHistoryCopyIndex(db);
@@ -241,6 +242,15 @@ export function dropEnvironmentHoldColumns(db: DbConnection): void {
 
 export function dropThreadSearchOrderIndex(db: DbConnection): void {
   db.$client.exec("DROP INDEX IF EXISTS `threads_search_order_idx`");
+}
+
+export function rewindThreadFailureKindColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], { name: string }>("PRAGMA table_info(threads)")
+    .all();
+  if (columns.some((existing) => existing.name === "failure_kind")) {
+    db.$client.exec("ALTER TABLE threads DROP COLUMN failure_kind");
+  }
 }
 
 export function rewindThreadPurgeStartedColumn(db: DbConnection): void {

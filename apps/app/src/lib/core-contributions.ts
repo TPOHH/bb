@@ -9,7 +9,9 @@ type CoreContributionKind =
   | "tabs"
   | "messageMetadata"
   | "threadContextSegments"
-  | "threadActions";
+  | "threadActions"
+  | "threadInfoRows"
+  | "threadInfoSections";
 
 export type CoreContributionSlot<Kind extends CoreContributionKind> =
   CollectedPluginAppRegistrations[Kind][number] & {
