@@ -110,6 +110,8 @@ import {
   type CreateProjectRequest,
   type CreateProjectSourceRequest,
   type CreateProjectSourceFolderRequest,
+  type ImportProjectSourceFoldersRequest,
+  type ImportProjectSourceFoldersResponse,
   type UpdateProjectSourceFolderRequest,
   type CreateQueuedMessageRequest,
   type CreateThreadSectionRequest,
@@ -313,6 +315,7 @@ import {
   createMachineRequestSchema,
   createProjectSourceRequestSchema,
   createProjectSourceFolderRequestSchema,
+  importProjectSourceFoldersRequestSchema,
   updateProjectSourceFolderRequestSchema,
   createQueuedMessageRequestSchema,
   queuedMessageListQuerySchema,
@@ -595,6 +598,15 @@ export const publicApiRoutes = {
         CreateProjectSourceFolderRequest
       >(createProjectSourceFolderRequestSchema),
       response: jsonResponse<ProjectSourceFolder>({ status: 201 }),
+    }),
+    importSourceFolders: defineRoute({
+      path: "/projects/:id/sources/:sourceId/folders/import",
+      method: "post",
+      request: jsonRequest<
+        PathProjectSourceId,
+        ImportProjectSourceFoldersRequest
+      >(importProjectSourceFoldersRequestSchema),
+      response: jsonResponse<ImportProjectSourceFoldersResponse>(),
     }),
     updateSourceFolder: defineRoute({
       path: "/projects/:id/sources/:sourceId/folders/:folderId",

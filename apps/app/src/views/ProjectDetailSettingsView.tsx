@@ -14,6 +14,10 @@ import { Icon } from "@bb/shared-ui/icon";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { Pill } from "@bb/shared-ui/pill";
 import { ResourceOverflowMenu } from "@bb/shared-ui/resource-list";
+import {
+  ImportCodeWorkspaceDialog,
+  type ImportCodeWorkspaceTarget,
+} from "@/components/dialogs/ImportCodeWorkspaceDialog";
 import { ProjectPathDialog } from "@/components/dialogs/ProjectPathDialog";
 import {
   ProjectDeleteDialog,
@@ -177,6 +181,7 @@ interface MachineFoldersProps {
   onChangePath: () => void;
   onRemove: () => void;
   onAddFolder: () => void;
+  onImportCodeWorkspace: () => void;
   onChangeFolder: (folder: ProjectSourceFolder) => void;
 }
 
@@ -189,6 +194,7 @@ function MachineFolders({
   onChangePath,
   onRemove,
   onAddFolder,
+  onImportCodeWorkspace,
   onChangeFolder,
 }: MachineFoldersProps) {
   const connected = host.status === "connected";
@@ -256,15 +262,28 @@ function MachineFolders({
           />
         ))
       )}
-      <button
-        type="button"
-        disabled={pending || !connected}
-        onClick={onAddFolder}
-        className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-      >
-        <Icon name="Plus" className="size-3.5" />
-        {connected ? "Add folder" : "Add folder (machine offline)"}
-      </button>
+      <div className="flex flex-wrap items-center gap-x-4">
+        <button
+          type="button"
+          disabled={pending || !connected}
+          onClick={onAddFolder}
+          className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+        >
+          <Icon name="Plus" className="size-3.5" />
+          {connected ? "Add folder" : "Add folder (machine offline)"}
+        </button>
+        {connected ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={onImportCodeWorkspace}
+            className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          >
+            <Icon name="FileText" className="size-3.5" />
+            Import .code-workspace
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -371,6 +390,8 @@ export function ProjectDetailSettingsView() {
     useState<ProjectSourceDeleteDialogTarget | null>(null);
   const [machineSetupTarget, setMachineSetupTarget] =
     useState<ProjectMachineSetupDialogTarget | null>(null);
+  const [importTarget, setImportTarget] =
+    useState<ImportCodeWorkspaceTarget | null>(null);
   const [now] = useState(Date.now);
 
   const projects = sidebarNavigationQuery.data?.projects;
@@ -628,6 +649,15 @@ export function ProjectDetailSettingsView() {
                         hostName: host.name,
                       });
                     }}
+                    onImportCodeWorkspace={() => {
+                      if (!source) return;
+                      setImportTarget({
+                        projectId: project.id,
+                        sourceId: source.id,
+                        hostName: host.name,
+                        checkoutPath: source.path,
+                      });
+                    }}
                     onChangeFolder={(folder) => {
                       if (!source) return;
                       localSourcePicker.openPicker({
@@ -762,6 +792,13 @@ export function ProjectDetailSettingsView() {
         hostName={localSourcePicker.hostName}
         onOpenChange={localSourcePicker.projectPathDialog.onOpenChange}
         onSubmit={localSourcePicker.submitProjectPath}
+      />
+
+      <ImportCodeWorkspaceDialog
+        target={importTarget}
+        onOpenChange={(open) => {
+          if (!open) setImportTarget(null);
+        }}
       />
 
       <ProjectMachineSetupDialog
