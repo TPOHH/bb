@@ -69,10 +69,12 @@ import { runThreadLifecycleInTransaction } from "./lifecycle/run.js";
 import { buildExecutionOptions } from "./thread-commands.js";
 import {
   getActiveTurnId,
+  getActiveTurnInitiator,
   isActiveTurnMainRunIdle,
   isManualCompactionActive,
 } from "./thread-events.js";
 import { requireThreadCommandEnvironment } from "./thread-command-environment.js";
+import { resolvePermissionEscalation } from "./thread-runtime-config.js";
 import { assertThreadHostAcceptsWork } from "./thread-host-admission.js";
 import {
   requestThreadProvision,
@@ -592,6 +594,33 @@ async function runDispatchAttempt(
     ) {
       continued.outcome = waitOn({ kind: "thread-busy" });
       return;
+    }
+
+    if (
+      thread.status === "active" &&
+      attempt === "join-turn" &&
+      !isActiveTurnMainRunIdle(deps, currentThread)
+    ) {
+      const runningTurnInitiator = getActiveTurnInitiator(deps, currentThread);
+      if (
+        runningTurnInitiator !== null &&
+        resolvePermissionEscalation({ initiator: author.initiator }) ===
+          "deny" &&
+        resolvePermissionEscalation({ initiator: runningTurnInitiator }) ===
+          "ask"
+      ) {
+        deps.logger.info(
+          {
+            threadId: thread.id,
+            initiator: author.initiator,
+            runningTurnInitiator,
+            senderThreadId: author.senderThreadId,
+          },
+          "Queued a message behind the running turn instead of steering it in: its approval policy is deny and would revoke the running turn's approvals",
+        );
+        continued.outcome = waitOn({ kind: "thread-busy" });
+        return;
+      }
     }
 
     if (

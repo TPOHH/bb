@@ -22,6 +22,7 @@ import {
   type Thread,
   type ThreadChangedMessage,
   type ThreadEvent,
+  type ThreadTurnInitiator,
 } from "@bb/domain";
 import { groupHostDaemonEvents } from "@bb/host-daemon-contract";
 import {
@@ -87,6 +88,7 @@ interface SeedIdleThreadFixtureArgs {
 interface SeedProviderThreadFixtureArgs extends SeedIdleThreadFixtureArgs {
   status?: "active" | "idle" | "starting";
   serviceTier?: ServiceTier;
+  runningTurnInitiator?: ThreadTurnInitiator;
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -114,6 +116,9 @@ function seedProviderThreadFixture(
   });
   seedThreadRuntimeState(args.harness.deps, {
     environmentId: environment.id,
+    ...(args.runningTurnInitiator !== undefined
+      ? { initiator: args.runningTurnInitiator }
+      : {}),
     providerThreadId: `provider-send-dispatch-${args.value}`,
     serviceTier: args.serviceTier,
     threadId: thread.id,
@@ -992,6 +997,7 @@ describe("startup queue waits", () => {
     await withTestHarness(async (harness) => {
       const { sessionId, thread } = seedProviderThreadFixture({
         harness,
+        runningTurnInitiator: "agent",
         status: "active",
         value: 62,
       });

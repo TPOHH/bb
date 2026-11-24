@@ -37,6 +37,7 @@ import type {
 } from "@bb/provider-bridge-protocol/bridge-kit";
 import {
   assertProviderSupportsExecutionOptions,
+  keepRunningTurnApprovals,
   toProviderExecutionContext,
 } from "./execution-options.js";
 import {
@@ -1384,6 +1385,7 @@ export function createAgentRuntime(options: AgentRuntimeOptions): AgentRuntime {
         getThreadExecutionOptions: (threadId) =>
           threadRuntimeConfigs.get(threadId)?.options,
         onInteractiveRequest: options.onInteractiveRequest,
+        onStderr: options.onStderr,
         onToolCall: options.onToolCall,
         interactiveRequests,
         toolCalls,
@@ -2164,7 +2166,7 @@ export function createAgentRuntime(options: AgentRuntimeOptions): AgentRuntime {
       expectedTurnId,
       input,
       clientRequestId,
-      options: execOpts,
+      options: requestedOptions,
       contributedEnv,
       instructions,
     }) {
@@ -2175,7 +2177,7 @@ export function createAgentRuntime(options: AgentRuntimeOptions): AgentRuntime {
           const currentProc = requireProviderProcessForThread(threadId);
           assertProviderSupportsExecutionOptions({
             adapter: currentProc.adapter,
-            options: execOpts,
+            options: requestedOptions,
             providerId: pid,
           });
 
@@ -2192,13 +2194,23 @@ export function createAgentRuntime(options: AgentRuntimeOptions): AgentRuntime {
 
           await restartThreadBridgeIfRecommended({
             threadId,
-            options: execOpts,
+            options: requestedOptions,
             instructions,
           });
           const proc = requireProviderProcessForThread(threadId);
           const currentConfig = threadRuntimeConfigs.get(threadId);
           if (!currentConfig) {
             throw new Error(`No runtime configuration for thread ${threadId}`);
+          }
+          const execOpts = keepRunningTurnApprovals({
+            requested: requestedOptions,
+            running: currentConfig.options,
+          });
+          if (execOpts !== requestedOptions) {
+            options.onStderr?.(
+              `Steer for thread "${threadId}" on turn "${expectedTurnId}" asked for permission escalation "deny"; keeping the running turn's "ask" so the steer cannot revoke that turn's approvals.`,
+              threadId,
+            );
           }
           const resolvedContributedEnv =
             contributedEnv ?? currentConfig.contributedEnv;

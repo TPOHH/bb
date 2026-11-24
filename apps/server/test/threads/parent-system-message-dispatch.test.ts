@@ -46,6 +46,7 @@ describe("parent system message dispatch", () => {
         });
         seedThreadRuntimeState(harness.deps, {
           environmentId: environment.id,
+          initiator: "agent",
           providerThreadId: "provider-parent-notice",
           threadId: thread.id,
         });

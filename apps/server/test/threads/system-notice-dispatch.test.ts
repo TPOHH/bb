@@ -6,6 +6,7 @@ import {
 } from "@bb/db";
 import {
   turnRequestEventDataSchema,
+  type ThreadTurnInitiator,
   type TurnRequestEventData,
 } from "@bb/domain";
 import type {
@@ -41,6 +42,7 @@ import {
   createUserQuestionPayload,
 } from "../helpers/pending-interactions.js";
 import { textInput } from "../helpers/prompt-input.js";
+import { moveThreadStatus } from "../helpers/thread-status.js";
 import {
   seedEnvironment,
   seedHostSession,
@@ -85,7 +87,12 @@ afterEach(() => {
 
 function seedRunnableThread(
   harness: TestAppHarness,
-  args: { hostId: string; status: "idle" | "active"; title?: string },
+  args: {
+    hostId: string;
+    status: "idle" | "active";
+    title?: string;
+    runningTurnInitiator?: ThreadTurnInitiator;
+  },
 ) {
   const { host, session } = seedHostSession(harness.deps, {
     id: args.hostId,
@@ -107,6 +114,9 @@ function seedRunnableThread(
   });
   seedThreadRuntimeState(harness.deps, {
     environmentId: environment.id,
+    ...(args.runningTurnInitiator !== undefined
+      ? { initiator: args.runningTurnInitiator }
+      : {}),
     providerThreadId: `provider-${args.hostId}`,
     threadId: thread.id,
   });
@@ -440,6 +450,7 @@ describe("coalesced notices", () => {
       const { project, thread: parent } = seedRunnableThread(harness, {
         hostId: "host-waiting-notice",
         status: "active",
+        runningTurnInitiator: "agent",
       });
       const registered =
         harness.deps.pendingInteractions.registerPendingInteraction({
@@ -553,6 +564,7 @@ describe("notice recovery", () => {
       const { thread: parent } = seedRunnableThread(harness, {
         hostId: "host-notice-recovery",
         status: "active",
+        runningTurnInitiator: "agent",
       });
       const blocker = await createQueuedMessageForThread(harness.deps, {
         thread: parent,
@@ -604,6 +616,7 @@ describe("notices to a parent mid-turn", () => {
       const { thread: parent } = seedRunnableThread(harness, {
         hostId: "host-steer-running",
         status: "active",
+        runningTurnInitiator: "agent",
       });
 
       await expect(queueChildCompletedNotice(harness, parent.id)).resolves.toBe(
@@ -612,6 +625,47 @@ describe("notices to a parent mid-turn", () => {
 
       expect(turnSubmitTargets(harness, parent.id)).toEqual([
         { mode: "auto", expectedTurnId: "turn-host-steer-running" },
+      ]);
+      expect(queuedRows(harness, parent.id)).toEqual([]);
+    });
+  });
+
+  it("wait behind a turn the user started, then run as their own turn", async () => {
+    await withTestHarness(async (harness) => {
+      const { thread: parent } = seedRunnableThread(harness, {
+        hostId: "host-behind-user-turn",
+        status: "active",
+        runningTurnInitiator: "user",
+      });
+
+      await expect(queueChildCompletedNotice(harness, parent.id)).resolves.toBe(
+        true,
+      );
+      expect(turnSubmitTargets(harness, parent.id)).toEqual([]);
+      expect(queuedRows(harness, parent.id)).toEqual([
+        expect.objectContaining({ waitingOn: { kind: "thread-busy" } }),
+      ]);
+
+      moveThreadStatus(harness.deps, {
+        move: "run.succeeded",
+        threadId: parent.id,
+      });
+      await runQueuedMessageDispatch(harness.deps, {
+        kind: "thread-ready",
+        threadId: parent.id,
+      });
+
+      expect(turnSubmitTargets(harness, parent.id)).toEqual([
+        { mode: "auto", expectedTurnId: null },
+      ]);
+      expect(
+        turnRequests(harness, parent.id).map((request) => [
+          request.initiator,
+          request.target.kind,
+        ]),
+      ).toEqual([
+        ["user", "new-turn"],
+        ["system", "new-turn"],
       ]);
       expect(queuedRows(harness, parent.id)).toEqual([]);
     });
@@ -629,6 +683,7 @@ describe("notices to a parent mid-turn", () => {
       const { thread: parent } = seedRunnableThread(harness, {
         hostId: "host-steer-at-cap",
         status: "active",
+        runningTurnInitiator: "agent",
       });
 
       await queueChildCompletedNotice(harness, parent.id);
@@ -650,6 +705,7 @@ describe("notices to a parent mid-turn", () => {
       const { thread: parent } = seedRunnableThread(harness, {
         hostId: "host-steer-held",
         status: "active",
+        runningTurnInitiator: "agent",
       });
 
       await queueChildCompletedNotice(harness, parent.id);
@@ -675,6 +731,7 @@ describe("notices to a parent mid-turn", () => {
       const { thread: parent } = seedRunnableThread(harness, {
         hostId: "host-steer-question",
         status: "active",
+        runningTurnInitiator: "agent",
       });
       const registered =
         harness.deps.pendingInteractions.registerPendingInteraction({
@@ -728,6 +785,7 @@ describe("notices to a parent mid-turn", () => {
       } = seedRunnableThread(harness, {
         hostId: "host-steer-offline",
         status: "active",
+        runningTurnInitiator: "agent",
       });
       handleDaemonSocketClosed(harness.deps, { sessionId: session.id });
       harness.hub.cancelPendingDaemonDisconnect(session.id);

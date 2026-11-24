@@ -919,6 +919,26 @@ export function isManualCompactionActive(
   );
 }
 
+export function getActiveTurnInitiator(
+  deps: ThreadEventReadDeps,
+  thread: Pick<Thread, "id" | "status">,
+): ThreadTurnInitiator | null {
+  if (thread.status !== "active") {
+    return null;
+  }
+  const activeTurnId = getActiveStoredTurnId(deps.db, thread.id);
+  const requestRow =
+    (activeTurnId === null
+      ? null
+      : getStoredTurnRequestEventForTurn(deps.db, {
+          threadId: thread.id,
+          turnId: activeTurnId,
+        })) ?? getLastStoredTurnRequestEvent(deps.db, thread.id);
+  return requestRow === null
+    ? null
+    : parseStoredTurnRequestEvent(requestRow).initiator;
+}
+
 export function getLastProviderThreadId(
   deps: ThreadEventReadDeps,
   threadId: string,

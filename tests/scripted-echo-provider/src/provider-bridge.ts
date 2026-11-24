@@ -327,6 +327,29 @@ function parseTurnPlan(inputText: string): TurnPlan {
   };
 }
 
+function requestApproval(
+  session: Session,
+  providerTurnId: string,
+  plan: TurnPlan & { approvalKind: ApprovalKind },
+): JsonRpcId {
+  const requestId = sendRequest(
+    BRIDGE_INBOUND_REQUEST_METHODS.interactionRequest,
+    {
+      providerThreadId: session.providerThreadId,
+      threadId: session.threadId,
+      turnId: providerTurnId,
+      payload: approvalPayload(plan.approvalKind, `approval-${providerTurnId}`),
+    },
+  );
+  pendingReplies.set(requestId, {
+    kind: "approval",
+    threadId: session.threadId,
+    responseText: plan.responseText,
+    delayMs: plan.delayMs,
+  });
+  return requestId;
+}
+
 function approvalPayload(
   kind: ApprovalKind,
   itemId: string,
@@ -677,23 +700,9 @@ function beginTurn(args: {
   }
 
   if (plan.approvalKind !== null) {
-    const requestId = sendRequest(
-      BRIDGE_INBOUND_REQUEST_METHODS.interactionRequest,
-      {
-        providerThreadId: session.providerThreadId,
-        threadId: session.threadId,
-        turnId: providerTurnId,
-        payload: approvalPayload(
-          plan.approvalKind,
-          `approval-${providerTurnId}`,
-        ),
-      },
-    );
-    pendingReplies.set(requestId, {
-      kind: "approval",
-      threadId: session.threadId,
-      responseText: plan.responseText,
-      delayMs: plan.delayMs,
+    const requestId = requestApproval(session, providerTurnId, {
+      ...plan,
+      approvalKind: plan.approvalKind,
     });
     if (plan.withdrawApproval) {
       setTimeout(() => {
@@ -1229,6 +1238,7 @@ const handlers: Record<string, RequestHandler> = {
       return;
     }
     const providerTurnId = session.activeTurn.providerTurnId;
+    const steerPlan = parseTurnPlan(promptText(parsed.data.input));
     const acceptSteer = (): void => {
       emitDeltas(session.threadId, [
         {
@@ -1238,6 +1248,12 @@ const handlers: Record<string, RequestHandler> = {
         },
       ]);
       io.sendResult(id, {});
+      if (steerPlan.approvalKind !== null) {
+        requestApproval(session, providerTurnId, {
+          ...steerPlan,
+          approvalKind: steerPlan.approvalKind,
+        });
+      }
     };
     if (options.steerResponseDelayMs === undefined) {
       acceptSteer();

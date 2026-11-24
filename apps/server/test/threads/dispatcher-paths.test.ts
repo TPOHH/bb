@@ -1,5 +1,6 @@
 import {
   getQueuedThreadMessage,
+  getThread,
   listQueuedThreadMessages,
   setQueuedThreadMessageGroupBoundary,
 } from "@bb/db";
@@ -528,6 +529,132 @@ describe("queue intent after the dispatch hook", () => {
       expect(queuedRows(harness, thread.id)).toEqual([
         expect.objectContaining({ waitingOn: { kind: "thread-busy" } }),
       ]);
+    });
+  });
+});
+
+describe("an agent message sent while a turn runs", () => {
+  async function sendFromSender(
+    harness: TestAppHarness,
+    args: { threadId: string; senderThreadId: string; text: string },
+  ) {
+    const thread = getThread(harness.db, args.threadId);
+    if (thread === null) throw new Error("expected a thread");
+    return acceptThreadSendRequest(harness.deps, {
+      payload: {
+        input: textInput(args.text),
+        mode: "auto",
+        senderThreadId: args.senderThreadId,
+      },
+      thread,
+    });
+  }
+
+  function runDispatchedTurn(
+    harness: TestAppHarness,
+    fixture: ReturnType<typeof seedRunnableThread>,
+    turnId: string,
+  ) {
+    moveThreadStatus(harness.deps, {
+      move: "run.started",
+      threadId: fixture.thread.id,
+    });
+    seedTurnStarted(harness.deps, {
+      environmentId: fixture.environment.id,
+      threadId: fixture.thread.id,
+      turnId,
+      providerThreadId: `provider-${fixture.host.id}`,
+    });
+  }
+
+  it("waits behind a turn the user is running, then runs every message in order", async () => {
+    await withTestHarness(async (harness) => {
+      const fixture = seedRunnableThread(harness, {
+        hostId: "host-agent-behind-user-turn",
+        status: "active",
+      });
+      const { thread } = fixture;
+      const sender = seedThread(harness.deps, {
+        projectId: fixture.project.id,
+        title: "Sender",
+      });
+
+      for (const text of ["Notice 1", "Notice 2", "Notice 3"]) {
+        const response = await sendFromSender(harness, {
+          threadId: thread.id,
+          senderThreadId: sender.id,
+          text,
+        });
+        expect(response).toMatchObject({
+          delivery: "queued",
+          queuedMessage: { waitingOn: { kind: "thread-busy" } },
+        });
+      }
+      expect(
+        listQueuedThreadCommands(harness, "turn.submit", thread.id),
+      ).toHaveLength(0);
+
+      for (let turn = 1; queuedRows(harness, thread.id).length > 0; turn += 1) {
+        if (turn > 3) throw new Error("the queue did not drain");
+        moveThreadStatus(harness.deps, {
+          move: "run.succeeded",
+          threadId: thread.id,
+        });
+        await runQueuedMessageDispatch(harness.deps, {
+          kind: "thread-ready",
+          threadId: thread.id,
+        });
+        runDispatchedTurn(harness, fixture, `turn-notice-${turn}`);
+      }
+
+      const agentRequests = turnRequests(harness, thread.id).filter(
+        (request) => request.initiator === "agent",
+      );
+      expect(
+        agentRequests.flatMap((request) => [
+          request.target.kind,
+          ...(firstText(request).match(/Notice \d/gu) ?? []),
+        ]),
+      ).toEqual([
+        "new-turn",
+        "Notice 1",
+        "new-turn",
+        "Notice 2",
+        "new-turn",
+        "Notice 3",
+      ]);
+    });
+  });
+
+  it("still steers into a turn an agent message started", async () => {
+    await withTestHarness(async (harness) => {
+      const fixture = seedRunnableThread(harness, {
+        hostId: "host-agent-into-agent-turn",
+        status: "idle",
+      });
+      const sender = seedThread(harness.deps, {
+        projectId: fixture.project.id,
+        title: "Sender",
+      });
+      await sendFromSender(harness, {
+        threadId: fixture.thread.id,
+        senderThreadId: sender.id,
+        text: "First notice",
+      });
+      runDispatchedTurn(harness, fixture, "turn-first-notice");
+
+      const response = await sendFromSender(harness, {
+        threadId: fixture.thread.id,
+        senderThreadId: sender.id,
+        text: "Second notice",
+      });
+
+      expect(response).toMatchObject({ delivery: "sent" });
+      expect(
+        turnRequests(harness, fixture.thread.id).map(
+          (request) => request.target.kind,
+        ),
+      ).toEqual(["new-turn", "new-turn", "auto"]);
     });
   });
 });

@@ -75,8 +75,9 @@ A plugin's commands and settings are documented in that plugin's own skill.
   reads; use `bb thread wait <thread-id>` when you must block.
 - `bb thread tell` steers the active turn by default. Steer for a wrong
   direction, a hard stop, or a critical clarification; use `--mode queue` for
-  non-urgent follow-ups. A send reported as `queued` is not a failure; do not
-  resend it.
+  non-urgent follow-ups. A tell into a turn the user started always queues
+  until that turn ends, so it cannot revoke the user's approvals. A send
+  reported as `queued` is not a failure; do not resend it.
 - For a review or fix pipeline, spawn the follow-up with
   `--environment <environment-id>` from `bb thread show <thread-id> --json` so
   it sees the same files.

@@ -40,6 +40,7 @@ import type {
   ThreadOriginKind,
   ThreadStatus,
   ThreadParentNotifications,
+  ThreadTurnInitiator,
   ThreadVisibility,
 } from "@bb/domain";
 import type { AppDeps } from "../../src/types.js";
@@ -382,6 +383,7 @@ export function seedThreadRuntimeState(
   deps: Pick<AppDeps, "db" | "hub">,
   args: {
     environmentId: string | null;
+    initiator?: ThreadTurnInitiator;
     inputText?: string;
     model?: string;
     providerThreadId: string;
@@ -426,7 +428,7 @@ export function seedThreadRuntimeState(
         permissionMode: args.permissionMode ?? "full",
         source: "client/turn/requested",
       },
-      initiator: "user",
+      initiator: args.initiator ?? "user",
       senderThreadId: null,
       request: {
         method: "turn/start",
