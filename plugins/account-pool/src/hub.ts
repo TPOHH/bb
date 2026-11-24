@@ -9,6 +9,7 @@ import type {
   AccountPoolConfig,
   AccountQuota,
   AccountSecret,
+  AccountSummary,
   ModelFamily,
   PoolProvider,
   PoolStatus,
@@ -33,12 +34,14 @@ import {
   isUsageRestricted,
   retryAfterMilliseconds,
 } from "./quota.js";
-import type {
-  AccountBinding,
-  AccountStore,
-  HubTokenStore,
-  PoolAffinityStore,
-  QuotaStore,
+import {
+  AccountProxyUnreadableError,
+  AccountRemovedError,
+  type AccountBinding,
+  type AccountStore,
+  type HubTokenStore,
+  type PoolAffinityStore,
+  type QuotaStore,
 } from "./store.js";
 import { parentRequestHeaders, type ParentPool } from "./parent-pool.js";
 
@@ -79,6 +82,7 @@ interface HubOptions {
   getSettings: () => AccountPoolConfig;
   adapters: ReadonlyMap<PoolProvider, ProviderAdapter>;
   fetch: typeof fetch;
+  fetchFor: (account: Account) => Promise<typeof fetch>;
   now: () => number;
   drainTimeoutMs: number;
   getParentRoute: () => ParentPool | null;
@@ -374,6 +378,8 @@ export class AccountPoolHub {
             (error: unknown) => {
               if (
                 !(error instanceof TransientOAuthRefreshError) &&
+                !(error instanceof AccountProxyUnreadableError) &&
+                !(error instanceof AccountRemovedError) &&
                 (recover || error instanceof OAuthRefreshError)
               )
                 this.setError(account.id, errorMessage(error));
@@ -382,10 +388,11 @@ export class AccountPoolHub {
           ),
         accounts: this.options.accounts,
         quotas: this.options.quotas,
-        fetch: this.options.fetch,
+        fetch: async (input, init) =>
+          (await this.options.fetchFor(account))(input, init),
         now: this.options.now,
       })
-      .catch(() => undefined)
+      .catch(() => {})
       .finally(() => this.usageRefreshes.delete(account.id));
     this.usageRefreshes.set(account.id, refresh);
     return refresh;
@@ -424,18 +431,50 @@ export class AccountPoolHub {
       inFlight: this.inFlightCount(),
       accepting: this.accepting,
       hosts: await this.options.hubTokens.list(),
-      accounts: accounts.map((account) => {
-        const quota = this.options.quotas.get(account.id);
-        const { accountId: _accountId, ...quotaFields } = quota;
-        return {
-          ...account,
-          lastUsedHostName: null,
-          ...quotaFields,
-          inFlight: this.inFlightByAccount.get(account.id) ?? 0,
-          status: accountStatus(account, quota, now),
-        };
-      }),
+      accounts: await Promise.all(
+        accounts.map(async (account) => {
+          const proxy = await this.proxyStatus(account.id);
+          const storedQuota = this.options.quotas.get(account.id);
+          const quota = proxy.proxyUnreadable
+            ? {
+                ...storedQuota,
+                error: new AccountProxyUnreadableError(account.id).message,
+              }
+            : storedQuota;
+          const { accountId: _accountId, ...quotaFields } = storedQuota;
+          return {
+            ...account,
+            lastUsedHostName: null,
+            ...quotaFields,
+            ...proxy,
+            inFlight: this.inFlightByAccount.get(account.id) ?? 0,
+            status: accountStatus(account, quota, now),
+          };
+        }),
+      ),
     };
+  }
+
+  private async proxyStatus(
+    id: string,
+  ): Promise<Pick<AccountSummary, "proxy" | "proxyUnreadable">> {
+    try {
+      const address = await this.options.accounts.readProxy(id);
+      const url = address === null ? null : new URL(address);
+      return {
+        proxy:
+          url === null
+            ? null
+            : {
+                scheme: url.protocol === "http:" ? "http" : "https",
+                host: url.host,
+              },
+        proxyUnreadable: false,
+      };
+    } catch (error) {
+      if (!(error instanceof AccountProxyUnreadableError)) throw error;
+      return { proxy: null, proxyUnreadable: true };
+    }
   }
 
   private async forward(
@@ -512,6 +551,11 @@ export class AccountPoolHub {
           activePacing = undefined;
         }
         if (heldMs > 0) {
+          if ((await this.proxyStatus(selected.account.id)).proxyUnreadable) {
+            attempted.add(selected.account.id);
+            previousAccountId = selected.account.id;
+            continue;
+          }
           if (activePacing !== undefined) {
             pacing = activePacing;
             waited.add(selected.account.id);
@@ -564,7 +608,10 @@ export class AccountPoolHub {
           signal.throwIfAborted();
           if (error instanceof TransientOAuthRefreshError) {
             failure = { status: 503, message: error.message, headers: {} };
-          } else {
+          } else if (
+            !(error instanceof AccountProxyUnreadableError) &&
+            !(error instanceof AccountRemovedError)
+          ) {
             this.setError(selected.account.id, errorMessage(error));
           }
           continue;
@@ -604,6 +651,11 @@ export class AccountPoolHub {
               pacing = null;
             }
             signal.throwIfAborted();
+            if (
+              error instanceof AccountProxyUnreadableError ||
+              error instanceof AccountRemovedError
+            )
+              break;
             if (!(error instanceof UpstreamConnectionError)) throw error;
             failure = {
               status: 502,
@@ -711,7 +763,10 @@ export class AccountPoolHub {
                     message: error.message,
                     headers: {},
                   };
-                } else {
+                } else if (
+                  !(error instanceof AccountProxyUnreadableError) &&
+                  !(error instanceof AccountRemovedError)
+                ) {
                   const message = errorMessage(error);
                   await this.rejectCredential(
                     selected.account,
@@ -1151,13 +1206,14 @@ export class AccountPoolHub {
               }
               throw backoff.error;
             }
+            const accountFetch = await this.options.fetchFor(account);
             try {
               const result = await adapter.refreshSecret({
                 account,
                 secret,
                 accounts: this.options.accounts,
                 quotas: this.options.quotas,
-                fetch: this.options.fetch,
+                fetch: accountFetch,
                 now: this.options.now,
                 forceRefresh,
               });
@@ -1258,22 +1314,21 @@ export class AccountPoolHub {
       new Uint8Array(upstreamBody).set(body);
       const url = adapter.upstreamUrl(request, this.options.getSettings());
       const headers = adapter.requestHeaders(request.headers, account, secret);
-      const response = await this.options
-        .fetch(url, {
-          method: request.method,
-          headers,
-          ...(request.method === "GET" || request.method === "HEAD"
-            ? {}
-            : { body: upstreamBody }),
-          signal: controller.signal,
-        })
-        .catch((cause: unknown) => {
-          if (!controller.signal.aborted)
-            this.options.onUpstreamError(adapter.provider, cause);
-          throw new UpstreamConnectionError("Upstream connection failed.", {
-            cause,
-          });
+      const accountFetch = await this.options.fetchFor(account);
+      const response = await accountFetch(url, {
+        method: request.method,
+        headers,
+        ...(request.method === "GET" || request.method === "HEAD"
+          ? {}
+          : { body: upstreamBody }),
+        signal: controller.signal,
+      }).catch((cause: unknown) => {
+        if (!controller.signal.aborted)
+          this.options.onUpstreamError(adapter.provider, cause);
+        throw new UpstreamConnectionError("Upstream connection failed.", {
+          cause,
         });
+      });
       return { response, controller, release };
     } catch (error) {
       release();
@@ -1367,10 +1422,10 @@ export class AccountPoolHub {
     return this.accountAvailability(accounts, family);
   }
 
-  private accountAvailability(
+  private async accountAvailability(
     accounts: readonly Account[],
     family: ModelFamily,
-  ): RetryAvailability {
+  ): Promise<RetryAvailability> {
     const enabled = accounts.filter((account) => account.enabled);
     if (enabled.length === 0)
       return { kind: "unavailable", reason: "no-enabled-account" };
@@ -1379,7 +1434,11 @@ export class AccountPoolHub {
     let unknown = false;
     for (const account of enabled) {
       const quota = this.options.quotas.get(account.id);
-      if (quota.error !== null) continue;
+      if (
+        quota.error !== null ||
+        (await this.proxyStatus(account.id)).proxyUnreadable
+      )
+        continue;
       if (isUsageRestricted(quota, now)) {
         unknown = true;
         continue;
@@ -1403,11 +1462,11 @@ export class AccountPoolHub {
         };
   }
 
-  private noEligibleResponse(
+  private async noEligibleResponse(
     accounts: readonly Account[],
     family: ModelFamily,
     adapter: ProviderAdapter,
-  ): Response {
+  ): Promise<Response> {
     if (!accounts.some((account) => account.enabled)) {
       return adapter.errorResponse(
         503,
@@ -1415,7 +1474,7 @@ export class AccountPoolHub {
       );
     }
     const now = this.options.now();
-    const availability = this.accountAvailability(accounts, family);
+    const availability = await this.accountAvailability(accounts, family);
     const next =
       availability.kind === "blocked" ? availability.retryAt : undefined;
     const retryAfter = Math.max(
@@ -1500,6 +1559,7 @@ export function createHub(options: {
   hubTokens: HubTokenStore;
   getSettings: () => AccountPoolConfig;
   fetch?: typeof fetch;
+  fetchFor?: HubOptions["fetchFor"];
   now?: () => number;
   refreshUrl?: string;
   codexRefreshUrl?: string;
@@ -1539,6 +1599,7 @@ export function createHub(options: {
     getSettings: options.getSettings,
     adapters,
     fetch: options.fetch ?? fetch,
+    fetchFor: options.fetchFor ?? (async () => options.fetch ?? fetch),
     now: options.now ?? Date.now,
     drainTimeoutMs: options.drainTimeoutMs ?? 60_000,
     getParentRoute: options.getParentRoute ?? (() => null),

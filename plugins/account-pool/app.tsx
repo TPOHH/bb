@@ -76,6 +76,7 @@ import {
   DEFAULT_ACCOUNT_POOL_CONFIG,
   limitWindowSlotSchema,
   modelFamilySchema,
+  proxyUrlSchema,
   statusSchema,
 } from "./src/contracts.js";
 import { blockingResetAt } from "./src/quota.js";
@@ -86,7 +87,8 @@ import {
 import { isNonImeKey } from "@/lib/ime-keyboard";
 
 type DialogState =
-  | { kind: "account" | "priority" | "remove"; accountId: string }
+  | { kind: "account" | "priority" | "proxy" | "remove"; accountId: string }
+  | { kind: "new-login"; provider: PoolProvider }
   | { kind: "claude-login" | "codex-login"; target: LoginTarget }
   | { kind: "api-key" }
   | null;
@@ -104,6 +106,7 @@ const CONFIG_FIELDS: readonly ConfigField[] = [
 const ACCOUNT_ACTIONS = [
   "toggle",
   "priority",
+  "proxy",
   "refresh",
   "relogin",
   "remove",
@@ -545,6 +548,13 @@ function AccountRow({
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={pending}
+              onSelect={() => onAction("proxy")}
+            >
+              <Icon name="Globe" />
+              Set proxy…
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={pending}
               onSelect={() => onAction("refresh")}
             >
               <Icon name="RotateCcw" />
@@ -817,6 +827,30 @@ function AuthorizationUrlRow({
   );
 }
 
+function ProxyInput({
+  optional = false,
+  value,
+  onChange,
+}: {
+  optional?: boolean;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const label = optional ? "Proxy (optional)" : "Proxy address";
+  return (
+    <label className="grid gap-2 text-sm font-medium">
+      {label}
+      <Input
+        type="password"
+        autoComplete="off"
+        placeholder="https://proxy.example.com:3128"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
 function DialogFrame({
   title,
   children,
@@ -927,6 +961,7 @@ function AccountPoolSettings() {
   const [loginDone, setLoginDone] = useState<string | null>(null);
   const [pastedCode, setPastedCode] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [proxy, setProxy] = useState("");
   const [priority, setPriority] = useState("100");
   const [countdown, setCountdown] = useState(0);
   const mounted = useRef(true);
@@ -1019,6 +1054,7 @@ function AccountPoolSettings() {
   const selectedAccount =
     dialog?.kind === "account" ||
     dialog?.kind === "priority" ||
+    dialog?.kind === "proxy" ||
     dialog?.kind === "remove"
       ? (accounts.find((account) => account.id === dialog.accountId) ?? null)
       : null;
@@ -1133,15 +1169,23 @@ function AccountPoolSettings() {
     if (provider === "claude") await startClaude(target);
     else await startCodex(target);
   }
-  async function chooseAdd(
+  function chooseAdd(
     provider: PoolProvider,
     choice: "login" | "api-key",
-  ): Promise<void> {
-    if (choice === "login") {
-      await startLogin(provider, NEW_LOGIN);
-      return;
-    }
-    setDialog({ kind: "api-key" });
+  ): void {
+    setProxy("");
+    setError(null);
+    setDialog(
+      choice === "login"
+        ? { kind: "new-login", provider }
+        : { kind: "api-key" },
+    );
+  }
+  function saveProxy(id: string, address: string | null): void {
+    void run(`proxy-${id}`, async () => {
+      await rpc.call("account.setProxy", { id, proxy: address });
+      closeDialog();
+    });
   }
   async function accountAction(
     account: AccountSummary,
@@ -1150,6 +1194,12 @@ function AccountPoolSettings() {
     if (action === "priority") {
       setPriority(String(account.priority));
       setDialog({ kind: "priority", accountId: account.id });
+      return;
+    }
+    if (action === "proxy") {
+      setProxy("");
+      setError(null);
+      setDialog({ kind: "proxy", accountId: account.id });
       return;
     }
     if (action === "remove") {
@@ -1200,6 +1250,7 @@ function AccountPoolSettings() {
     setLoginStep(null);
     setCodexStep(null);
     setLoginDone(null);
+    setProxy("");
     setError(null);
   }
   const hubHosts =
@@ -1268,10 +1319,10 @@ function AccountPoolSettings() {
               until then.
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
-              <Button size="sm" onClick={() => void startClaude(NEW_LOGIN)}>
+              <Button size="sm" onClick={() => chooseAdd("claude", "login")}>
                 Sign in to Claude
               </Button>
-              <Button size="sm" onClick={() => void startCodex(NEW_LOGIN)}>
+              <Button size="sm" onClick={() => chooseAdd("codex", "login")}>
                 Sign in to Codex
               </Button>
             </div>
@@ -1321,7 +1372,7 @@ function AccountPoolSettings() {
                   />
                   <AddAccountMenu
                     provider={provider.id}
-                    onChoose={(choice) => void chooseAdd(provider.id, choice)}
+                    onChoose={(choice) => chooseAdd(provider.id, choice)}
                   />
                 </div>
               }
@@ -1551,6 +1602,89 @@ function AccountPoolSettings() {
             />
           </DialogFrame>
         ) : null}
+        {dialog?.kind === "proxy" && selectedAccount !== null ? (
+          <DialogFrame
+            title="Set proxy"
+            footer={
+              <>
+                <span className="flex-1" />
+                <Button variant="outline" onClick={closeDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={
+                    pending.has(`proxy-${selectedAccount.id}`) ||
+                    (selectedAccount.proxy === null &&
+                      !selectedAccount.proxyUnreadable)
+                  }
+                  onClick={() => saveProxy(selectedAccount.id, null)}
+                >
+                  Remove proxy
+                </Button>
+                <Button
+                  disabled={
+                    proxy.length === 0 ||
+                    pending.has(`proxy-${selectedAccount.id}`)
+                  }
+                  onClick={() => saveProxy(selectedAccount.id, proxy)}
+                >
+                  Save
+                </Button>
+              </>
+            }
+          >
+            <ProxyInput value={proxy} onChange={setProxy} />
+            {error === null ? null : (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </DialogFrame>
+        ) : null}
+        {dialog?.kind === "new-login" ? (
+          <DialogFrame
+            title={
+              dialog.provider === "claude"
+                ? "Sign in to Claude"
+                : "Sign in to Codex"
+            }
+            footer={
+              <>
+                <span className="flex-1" />
+                <Button variant="outline" onClick={closeDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (
+                      proxy.length > 0 &&
+                      !proxyUrlSchema.safeParse(proxy).success
+                    ) {
+                      setError("Enter a valid HTTP or HTTPS proxy URL.");
+                      return;
+                    }
+                    void startLogin(dialog.provider, {
+                      ...NEW_LOGIN,
+                      ...(proxy.length === 0 ? {} : { proxy }),
+                    });
+                    setProxy("");
+                  }}
+                >
+                  Continue
+                </Button>
+              </>
+            }
+          >
+            <StepIndicator step={1} />
+            <ProxyInput optional value={proxy} onChange={setProxy} />
+            {error === null ? null : (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </DialogFrame>
+        ) : null}
         {dialog?.kind === "api-key" ? (
           <DialogFrame
             title="Add an Anthropic API key"
@@ -1569,11 +1703,12 @@ function AccountPoolSettings() {
                       await rpc.call("account.add", {
                         provider: "claude",
                         apiKey: apiKey.trim(),
+                        ...(proxy.length === 0 ? {} : { proxy }),
                         label: null,
                         priority: 100,
                       });
                       setApiKey("");
-                      setDialog(null);
+                      closeDialog();
                     })
                   }
                 >
@@ -1594,6 +1729,12 @@ function AccountPoolSettings() {
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
             />
+            <ProxyInput optional value={proxy} onChange={setProxy} />
+            {error === null ? null : (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
           </DialogFrame>
         ) : null}
         {dialog?.kind === "remove" && selectedAccount !== null ? (
@@ -1656,7 +1797,7 @@ function AccountPoolSettings() {
               })
             }
             restart={() => void startClaude(dialog.target)}
-            addAnother={() => void startClaude(NEW_LOGIN)}
+            addAnother={() => chooseAdd("claude", "login")}
           />
         ) : null}
         {dialog?.kind === "codex-login" ? (
@@ -1675,7 +1816,7 @@ function AccountPoolSettings() {
             setPastedCode={() => {}}
             complete={() => {}}
             restart={() => void startCodex(dialog.target)}
-            addAnother={() => void startCodex(NEW_LOGIN)}
+            addAnother={() => chooseAdd("codex", "login")}
           />
         ) : null}
       </Dialog>
@@ -1773,6 +1914,19 @@ function AccountDialog({
         </dd>
         <dt className="text-muted-foreground">Priority</dt>
         <dd>{account.priority}</dd>
+        <dt className="text-muted-foreground">Proxy</dt>
+        <dd
+          className={cn(
+            "break-all",
+            account.proxyUnreadable && "text-destructive",
+          )}
+        >
+          {account.proxyUnreadable
+            ? "unreadable"
+            : account.proxy === null
+              ? "—"
+              : `${account.proxy.scheme}://${account.proxy.host}`}
+        </dd>
         <dt className="text-muted-foreground">Last used</dt>
         <dd>
           {account.lastUsedAt === null
@@ -1914,7 +2068,7 @@ function LoginDialog({
           </div>
         )
       ) : url === undefined ? (
-        provider === "codex" && error !== null ? (
+        error !== null ? (
           <LoginError message={error} restart={restart} />
         ) : (
           <p className="text-sm text-muted-foreground">Starting sign-in…</p>

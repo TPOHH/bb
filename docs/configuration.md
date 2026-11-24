@@ -1370,6 +1370,19 @@ enables it. Account tokens and per-machine hub tokens are 0600 files under
 `<dataDir>/plugins/account-pool/files/accounts/`. A pool from an earlier bb
 keeps them in `secrets/accounts/`; the plugin moves them on its next load.
 
+Optional per-account HTTP(S) proxies are stored in
+`account-<id>.proxy.json` in the same directory with file mode `0600`.
+An account's proxy takes precedence over proxy environment variables for its
+upstream, token, usage, profile, and server-side sign-in requests. If the
+proxy file is unreadable, the pool skips the account. Accounts without a
+proxy and traffic to a parent pool follow the proxy environment variables.
+Use `bb pool account proxy <id> --proxy-stdin` to set a proxy from stdin or
+`bb pool account proxy <id> --off` to remove it. Supply the proxy username
+and password together if the proxy requires credentials. A rollback to a build
+without per-account proxies ignores the setting and sends traffic directly.
+Before rolling back, remove per-account proxies with
+`bb pool account proxy <id> --off`.
+
 | Setting                    | Default                                 | Effect                                                                                                                                             |
 | -------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `switchThreshold`          | `0.98`                                  | Shared or model-family quota fraction from which other accounts are preferred; the account still serves matching traffic until upstream refuses it |
